@@ -1,0 +1,13 @@
+[package]
+name = "tls_codec"
+version = "0.1.0"
+authors = ["Franziskus Kiefer <franziskuskiefer@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tls_codec_derive = { version = "0.1", path = "../tls_codec_derive", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[features]
+derive = [ "tls_codec_derive" ]
+serde_serialize = [ "serde" ]

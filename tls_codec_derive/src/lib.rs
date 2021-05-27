@@ -27,8 +27,8 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
 
                 let gen = quote! {
                     impl tls_codec::Serialize for #ident {
-                        fn tls_serialize(&self, buffer: &mut Vec<u8>) -> Result<(), tls_codec::Error> {
-                            #(self.#idents.tls_serialize(buffer)?;)*
+                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
+                            #(self.#idents.tls_serialize(writer)?;)*
                             Ok(())
                         }
                     }
@@ -72,11 +72,11 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
 
             let gen = quote! {
                 impl tls_codec::Serialize for #ident {
-                    fn tls_serialize(&self, buffer: &mut Vec<u8>) -> Result<(), tls_codec::Error> {
+                    fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
                         let enum_value: #repr = match self {
                             #(#variants)*
                         };
-                        enum_value.tls_serialize(buffer)
+                        enum_value.tls_serialize(writer)
                     }
                 }
 
@@ -127,7 +127,7 @@ fn impl_deserialize(ast: DeriveInput) -> Result<TokenStream> {
 
                 let gen = quote! {
                     impl tls_codec::Deserialize for #ident {
-                        fn tls_deserialize<R: std::io::Read>(bytes: &mut R) -> Result<Self, tls_codec::Error> {
+                        fn tls_deserialize<R: std::io::Read>(bytes: &mut R) -> core::result::Result<Self, tls_codec::Error> {
                             Ok(Self {
                                 #(#idents: #paths::tls_deserialize(bytes)?,)*
                             })
@@ -174,7 +174,7 @@ fn impl_deserialize(ast: DeriveInput) -> Result<TokenStream> {
             let gen = quote! {
                 impl tls_codec::Deserialize for #ident {
                     #[allow(non_upper_case_globals)]
-                    fn tls_deserialize<R: std::io::Read>(bytes: &mut R) -> Result<Self, tls_codec::Error> {
+                    fn tls_deserialize<R: std::io::Read>(bytes: &mut R) -> core::result::Result<Self, tls_codec::Error> {
                         #(#discriminants)*
 
                         let value = #repr::tls_deserialize(bytes)?;

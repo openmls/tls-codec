@@ -7,17 +7,24 @@
 //! derived.
 //!
 //! This crate provides the following data structures that implement TLS
-//! serialization
+//! serialization/deserialization
 //! * `u8`, `u16`, `u32`, `u64`
 //! * `TlsVecU8`, `TlsVecU16`, `TlsVecU32`
-//! * `[u8; 2]`, `[u8; 4]`, `[u8; 8]`, `[u8; 16]`, `[u8; 32]`, `[u8; 64]`
+//! * `SecretTlsVecU8`, `SecretTlsVecU16`, `SecretTlsVecU32`
+//!   The same as the `TlsVec*` versions but it implements zeroize, requiring
+//!   the elements to implement zeroize as well.
+//! * `[u8; l]`, for `l ∈ [1..128]`
+//! * Serialize for `Option<T>` where `T: Serialize`
+//! * Deserialize for `Option<T>` where `T: Deserialize`
 
-use std::io::Read;
+use std::io::{Read, Write};
 
 mod arrays;
 mod primitives;
 mod tls_vec;
-pub use tls_vec::{TlsVecU16, TlsVecU32, TlsVecU8};
+pub use tls_vec::{
+    SecretTlsVecU16, SecretTlsVecU32, SecretTlsVecU8, TlsVecU16, TlsVecU32, TlsVecU8,
+};
 
 #[cfg(feature = "derive")]
 pub use tls_codec_derive::{TlsDeserialize, TlsSerialize};
@@ -64,7 +71,7 @@ pub trait TlsSize {
 /// * `tls_serialize` that takes a buffer to write the serialization to
 /// * `tls_serialize_detached` that returns a byte vector
 pub trait Serialize: TlsSize {
-    fn tls_serialize(&self, buffer: &mut Vec<u8>) -> Result<(), Error>;
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
 
     fn tls_serialize_detached(&self) -> Result<Vec<u8>, Error> {
         let mut buffer = Vec::with_capacity(self.serialized_len());

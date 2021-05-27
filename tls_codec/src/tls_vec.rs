@@ -1,21 +1,26 @@
 //! A vector with a length field for TLS serialisation.
 //! Use this for any vector that is serialised.
 
-use std::{convert::TryInto, io::Read};
+use std::{
+    convert::TryInto,
+    io::{Read, Write},
+    ops::Drop,
+};
 
 #[cfg(feature = "serde_serialize")]
 use serde::ser::SerializeStruct;
+use zeroize::Zeroize;
 
 use crate::{Deserialize, Error, Serialize, TlsSize};
 
 macro_rules! impl_tls_vec {
-    ($size:ty, $name:ident, $len_len: literal) => {
-        #[derive(PartialEq, Clone, Debug)]
-        pub struct $name<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> {
+    ($size:ty, $name:ident, $len_len: literal, $($bounds: ident),*) => {
+        #[derive(PartialEq, Eq, Clone, Debug)]
+        pub struct $name<T: $($bounds + )*> {
             vec: Vec<T>,
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> $name<T> {
+        impl<T: $($bounds + )*> $name<T> {
             /// Create a new `TlsVec` from a Rust Vec.
             pub fn new(vec: Vec<T>) -> Self {
                 Self { vec }
@@ -26,6 +31,11 @@ macro_rules! impl_tls_vec {
                 Self {
                     vec: slice.to_vec(),
                 }
+            }
+
+            /// Get the length of the vector.
+            pub fn len(&self) -> usize {
+                self.vec.len()
             }
 
             /// Get a slice to the raw vector.
@@ -55,25 +65,33 @@ macro_rules! impl_tls_vec {
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> From<Vec<T>> for $name<T> {
+        impl<T: $($bounds + )*> From<Vec<T>>
+            for $name<T>
+        {
             fn from(v: Vec<T>) -> Self {
                 Self::new(v)
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> From<&[T]> for $name<T> {
+        impl<T: $($bounds + )*> From<&[T]>
+            for $name<T>
+        {
             fn from(v: &[T]) -> Self {
                 Self::from_slice(v)
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> From<$name<T>> for Vec<T> {
-            fn from(v: $name<T>) -> Self {
-                v.vec
+        impl<T: $($bounds + )*> From<$name<T>>
+            for Vec<T>
+        {
+            fn from(mut v: $name<T>) -> Self {
+                std::mem::take(&mut v.vec)
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> Default for $name<T> {
+        impl<T: $($bounds + )*> Default
+            for $name<T>
+        {
             fn default() -> Self {
                 Self { vec: Vec::new() }
             }
@@ -82,7 +100,7 @@ macro_rules! impl_tls_vec {
         #[cfg(feature = "serde_serialize")]
         impl<T> serde::Serialize for $name<T>
         where
-            T: Serialize + Deserialize + Clone + PartialEq + TlsSize + serde::Serialize,
+            T: $($bounds + )* serde::Serialize,
         {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -97,7 +115,13 @@ macro_rules! impl_tls_vec {
         #[cfg(feature = "serde_serialize")]
         impl<'de, T> serde::de::Deserialize<'de> for $name<T>
         where
-            T: Serialize + Deserialize + Clone + PartialEq + TlsSize + serde::de::Deserialize<'de>,
+            T: Serialize
+                + Deserialize
+                + Clone
+                + PartialEq
+                + TlsSize
+                + $($bounds + )*
+                serde::de::Deserialize<'de>,
         {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
@@ -150,7 +174,8 @@ macro_rules! impl_tls_vec {
                         + Clone
                         + PartialEq
                         + TlsSize
-                        + serde::de::Deserialize<'de>,
+                        + $($bounds + )*
+                        serde::de::Deserialize<'de>,
                 {
                     type Value = $name<T>;
                     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -194,21 +219,25 @@ macro_rules! impl_tls_vec {
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> Serialize for $name<T> {
-            fn tls_serialize(&self, buffer: &mut Vec<u8>) -> Result<(), Error> {
+        impl<T: $($bounds + )*> Serialize
+            for $name<T>
+        {
+            fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
                 let len = self.vec.len();
                 if len > (<$size>::MAX as usize) {
                     return Err(Error::InvalidVectorLength);
                 }
-                (self.vec.len() as $size).tls_serialize(buffer)?;
+                (self.vec.len() as $size).tls_serialize(writer)?;
                 for e in self.vec.iter() {
-                    e.tls_serialize(buffer)?;
+                    e.tls_serialize(writer)?;
                 }
                 Ok(())
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> Deserialize for $name<T> {
+        impl<T: $($bounds + )*> Deserialize
+            for $name<T>
+        {
             fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error> {
                 let mut result = Self { vec: Vec::new() };
                 let len = <$size>::tls_deserialize(bytes)?;
@@ -232,7 +261,9 @@ macro_rules! impl_tls_vec {
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize> TlsSize for $name<T> {
+        impl<T: $($bounds + )*> TlsSize
+            for $name<T>
+        {
             #[inline]
             fn serialized_len(&self) -> usize {
                 self.vec
@@ -243,9 +274,60 @@ macro_rules! impl_tls_vec {
     };
 }
 
-impl_tls_vec!(u8, TlsVecU8, 1);
-impl_tls_vec!(u16, TlsVecU16, 2);
-impl_tls_vec!(u32, TlsVecU32, 4);
+macro_rules! impl_secret_tls_vec {
+    ($size:ty, $name:ident, $len_len: literal) => {
+        impl_tls_vec!(
+            $size,
+            $name,
+            $len_len,
+            Serialize,
+            Deserialize,
+            Clone,
+            PartialEq,
+            TlsSize,
+            Zeroize
+        );
+
+        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize + Zeroize> Zeroize
+            for $name<T>
+        {
+            fn zeroize(&mut self) {
+                self.vec.zeroize()
+            }
+        }
+
+        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize + Zeroize> Drop for $name<T> {
+            fn drop(&mut self) {
+                self.zeroize()
+            }
+        }
+    };
+}
+
+macro_rules! impl_public_tls_vec {
+    ($size:ty, $name:ident, $len_len: literal) => {
+        impl_tls_vec!(
+            $size,
+            $name,
+            $len_len,
+            Serialize,
+            Deserialize,
+            Clone,
+            PartialEq,
+            TlsSize
+        );
+    };
+}
+
+impl_public_tls_vec!(u8, TlsVecU8, 1);
+impl_public_tls_vec!(u16, TlsVecU16, 2);
+impl_public_tls_vec!(u32, TlsVecU32, 4);
+
+// Secrets should be put into these Secret tls vectors as they implement zeroize.
+impl_secret_tls_vec!(u8, SecretTlsVecU8, 1);
+impl_secret_tls_vec!(u16, SecretTlsVecU16, 2);
+impl_secret_tls_vec!(u32, SecretTlsVecU32, 4);
+
 // TODO: impl_tls_vec!(u64, TlsVecU64);
 
 impl From<std::num::TryFromIntError> for Error {

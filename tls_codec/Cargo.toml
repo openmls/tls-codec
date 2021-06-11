@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT"
 documentation = "https://docs.rs/tls_codec/"
 description = "A pure Rust implementation of the TLS (de)serialization"
-readme = "README.md"
+readme = "../README.md"
 repository = "https://github.com/openmls/tls-codec"
 
 [dependencies]

@@ -1,0 +1,41 @@
+name: Tests
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: tls_codec
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Build Debug
+        run: cargo build --verbose
+      - name: Test
+        run: cargo test --verbose
+      - name: Test Derive
+        run: cargo test --verbose --features derive
+      - name: Test Serialize
+        run: cargo test --verbose --features serde_serialize
+      - name: Test All Features
+        run: cargo test --verbose --all-features
+      - name: Test Release
+        run: |
+          cargo clean
+          cargo test --release --verbose --all-features

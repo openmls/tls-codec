@@ -1,0 +1,32 @@
+name: Rust Docs
+
+on:
+  push:
+    branches:
+      - main
+
+defaults:
+  run:
+    working-directory: tls_codec
+
+jobs:
+  rustdoc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hecrj/setup-rust-action@master
+      - uses: actions/checkout@master
+      - name: Build docs
+        run: |
+          cargo doc --all-features --no-deps
+          touch target/doc/.nojekyll
+          cat > target/doc/index.html <<EOF
+          <!doctype html>
+          <html><head>
+            <meta http-equiv="refresh" content="0; URL='tls_codec/index.html'" />
+          </head></html>
+          EOF
+      - name: Deploy to Github Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: target/doc

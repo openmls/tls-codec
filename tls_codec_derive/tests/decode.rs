@@ -29,6 +29,12 @@ pub struct ArrayWrap {
     data: [u8; 8],
 }
 
+#[derive(TlsSerialize, TlsDeserialize, Debug)]
+pub struct TupleStruct1(ExtensionStruct);
+
+#[derive(TlsSerialize, TlsDeserialize, Debug)]
+pub struct TupleStruct(ExtensionStruct, u8);
+
 #[test]
 fn simple_enum() {
     let mut b = &[0u8, 5] as &[u8];
@@ -45,6 +51,24 @@ fn simple_enum() {
         let deserialized = ExtensionType::tls_deserialize(&mut b).unwrap();
         assert_eq!(variant, &deserialized);
     }
+}
+
+#[test]
+fn byte_arrays() {
+    let x = [0u8, 1, 2, 3];
+    let serialized = x.tls_serialize_detached().unwrap();
+    assert_eq!(x.to_vec(), serialized);
+
+    let y = <[u8; 4]>::tls_deserialize(&mut serialized.as_slice()).unwrap();
+    assert_eq!(y, x);
+
+    let x = [0u8, 1, 2, 3, 7, 6, 5, 4];
+    let w = ArrayWrap { data: x };
+    let serialized = x.tls_serialize_detached().unwrap();
+    assert_eq!(x.to_vec(), serialized);
+
+    let y = ArrayWrap::tls_deserialize(&mut serialized.as_slice()).unwrap();
+    assert_eq!(y, w);
 }
 
 #[test]
@@ -68,22 +92,4 @@ fn simple_struct() {
     };
     let deserialized = ExtensionTypeVec::tls_deserialize(&mut b).unwrap();
     assert_eq!(extension, deserialized);
-}
-
-#[test]
-fn byte_arrays() {
-    let x = [0u8, 1, 2, 3];
-    let serialized = x.tls_serialize_detached().unwrap();
-    assert_eq!(x.to_vec(), serialized);
-
-    let y = <[u8; 4]>::tls_deserialize(&mut serialized.as_slice()).unwrap();
-    assert_eq!(y, x);
-
-    let x = [0u8, 1, 2, 3, 7, 6, 5, 4];
-    let w = ArrayWrap { data: x };
-    let serialized = x.tls_serialize_detached().unwrap();
-    assert_eq!(x.to_vec(), serialized);
-
-    let y = ArrayWrap::tls_deserialize(&mut serialized.as_slice()).unwrap();
-    assert_eq!(y, w);
 }

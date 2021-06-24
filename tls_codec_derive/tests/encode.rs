@@ -1,4 +1,4 @@
-use tls_codec::{SecretTlsVecU16, Serialize, TlsVecU32};
+use tls_codec::{SecretTlsVecU16, Serialize, TlsVecU16, TlsVecU32};
 use tls_codec_derive::TlsSerialize;
 
 #[derive(TlsSerialize, Debug)]
@@ -18,6 +18,17 @@ pub struct ExtensionStruct {
     extension_type: ExtensionType,
     extension_data: TlsVecU32<u8>,
     additional_data: Option<SecretTlsVecU16<u8>>,
+}
+
+#[derive(TlsSerialize, Debug)]
+pub struct TupleStruct1(ExtensionStruct);
+
+#[derive(TlsSerialize, Debug)]
+pub struct TupleStruct(ExtensionStruct, u8);
+
+#[derive(TlsSerialize, Debug)]
+pub struct StructWithLifetime<'a> {
+    value: &'a TlsVecU16<u8>,
 }
 
 #[test]
@@ -46,4 +57,18 @@ fn byte_arrays() {
     let x = [0u8, 1, 2, 3];
     let serialized = x.tls_serialize_detached().unwrap();
     assert_eq!(vec![0, 1, 2, 3], serialized);
+}
+
+#[test]
+fn lifetimes() {
+    let x = vec![1, 2, 3, 4].into();
+    let s = StructWithLifetime { value: &x };
+    let serialized = s.tls_serialize_detached().unwrap();
+    assert_eq!(vec![0, 4, 1, 2, 3, 4], serialized);
+
+    pub fn do_some_serializing(val: &StructWithLifetime) -> Vec<u8> {
+        val.tls_serialize_detached().unwrap()
+    }
+    let serialized = do_some_serializing(&s);
+    assert_eq!(vec![0, 4, 1, 2, 3, 4], serialized);
 }

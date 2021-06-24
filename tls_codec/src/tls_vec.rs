@@ -48,6 +48,16 @@ macro_rules! impl_tls_vec {
                 self.vec.clone()
             }
 
+            /// Check if the vector is empty.
+            pub fn is_empty(&self) -> bool {
+                self.vec.is_empty()
+            }
+
+            /// Get the underlying vector and consume this.
+            pub fn into_vec(mut self) -> Vec<T> {
+                std::mem::take(&mut self.vec)
+            }
+
             /// Add an element to this.
             pub fn push(&mut self, value: T) {
                 self.vec.push(value);
@@ -58,10 +68,61 @@ macro_rules! impl_tls_vec {
                 self.vec.pop()
             }
 
+            /// Returns a reference to an element or subslice depending on the type of index.
+            /// XXX: implement SliceIndex instead
+            pub fn get(&self, index: usize) -> Option<&T> {
+                self.vec.get(index)
+            }
+
+            /// Returns an iterator over the slice.
+            #[inline]
+            pub fn iter(&self) -> std::slice::Iter<'_, T> {
+                self.vec.iter()
+            }
+
+            /// Retains only the elements specified by the predicate.
+            pub fn retain<F>(&mut self, f: F)
+            where
+                F: FnMut(&T) -> bool,
+            {
+                self.vec.retain(f)
+            }
+
             /// Get the number of bytes used for the length encoding.
             #[inline(always)]
             pub fn len_len() -> usize {
                 $len_len
+            }
+        }
+
+        impl<T: std::hash::Hash+ $($bounds + )*> std::hash::Hash for $name<T> {
+            #[inline]
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.vec.hash(state)
+            }
+        }
+
+        impl<T: $($bounds + )*> std::ops::Index<usize> for $name<T> {
+            type Output = T;
+
+            #[inline]
+            fn index(&self, i: usize) -> &T {
+                &self.vec[i]
+            }
+        }
+
+        impl<T: $($bounds + )*> std::borrow::Borrow<[T]> for $name<T> {
+            fn borrow(&self) -> &[T] {
+                &self.vec
+            }
+        }
+
+        impl<T: $($bounds + )*> std::iter::FromIterator<T> for  $name<T>  {
+            fn from_iter<I>(iter: I) -> Self
+            where
+                I: IntoIterator<Item = T>, {
+                let vec = Vec::<T>::from_iter(iter);
+                Self{vec}
             }
         }
 

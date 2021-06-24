@@ -17,7 +17,10 @@
 //! * Serialize for `Option<T>` where `T: Serialize`
 //! * Deserialize for `Option<T>` where `T: Deserialize`
 
-use std::io::{Read, Write};
+use std::{
+    fmt::Display,
+    io::{Read, Write},
+};
 
 mod arrays;
 mod primitives;
@@ -46,6 +49,20 @@ pub enum Error {
 
     /// Reached the end of a byte stream.
     EndOfStream,
+}
+
+impl std::error::Error for Error {}
+
+impl Error {
+    pub fn _description(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
 }
 
 impl From<std::io::Error> for Error {

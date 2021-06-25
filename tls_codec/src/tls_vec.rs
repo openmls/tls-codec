@@ -22,11 +22,13 @@ macro_rules! impl_tls_vec {
 
         impl<T: $($bounds + )*> $name<T> {
             /// Create a new `TlsVec` from a Rust Vec.
+            #[inline]
             pub fn new(vec: Vec<T>) -> Self {
                 Self { vec }
             }
 
             /// Create a new `TlsVec` from a slice.
+            #[inline]
             pub fn from_slice(slice: &[T]) -> Self {
                 Self {
                     vec: slice.to_vec(),
@@ -34,42 +36,50 @@ macro_rules! impl_tls_vec {
             }
 
             /// Get the length of the vector.
+            #[inline]
             pub fn len(&self) -> usize {
                 self.vec.len()
             }
 
             /// Get a slice to the raw vector.
+            #[inline]
             pub fn as_slice(&self) -> &[T] {
                 &self.vec
             }
 
             /// Get a copy of the underlying vector.
+            #[inline]
             pub fn to_vec(&self) -> Vec<T> {
                 self.vec.clone()
             }
 
             /// Check if the vector is empty.
+            #[inline]
             pub fn is_empty(&self) -> bool {
                 self.vec.is_empty()
             }
 
             /// Get the underlying vector and consume this.
+            #[inline]
             pub fn into_vec(mut self) -> Vec<T> {
                 std::mem::take(&mut self.vec)
             }
 
             /// Add an element to this.
+            #[inline]
             pub fn push(&mut self, value: T) {
                 self.vec.push(value);
             }
 
             /// Remove the last element.
+            #[inline]
             pub fn pop(&mut self) -> Option<T> {
                 self.vec.pop()
             }
 
             /// Returns a reference to an element or subslice depending on the type of index.
             /// XXX: implement SliceIndex instead
+            #[inline]
             pub fn get(&self, index: usize) -> Option<&T> {
                 self.vec.get(index)
             }
@@ -81,6 +91,7 @@ macro_rules! impl_tls_vec {
             }
 
             /// Retains only the elements specified by the predicate.
+            #[inline]
             pub fn retain<F>(&mut self, f: F)
             where
                 F: FnMut(&T) -> bool,
@@ -107,17 +118,26 @@ macro_rules! impl_tls_vec {
 
             #[inline]
             fn index(&self, i: usize) -> &T {
-                &self.vec[i]
+                self.vec.index(i)
+            }
+        }
+
+        impl<T: $($bounds + )*> std::ops::IndexMut<usize> for $name<T> {
+            #[inline]
+            fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+                self.vec.index_mut(i)
             }
         }
 
         impl<T: $($bounds + )*> std::borrow::Borrow<[T]> for $name<T> {
+            #[inline]
             fn borrow(&self) -> &[T] {
                 &self.vec
             }
         }
 
         impl<T: $($bounds + )*> std::iter::FromIterator<T> for  $name<T>  {
+            #[inline]
             fn from_iter<I>(iter: I) -> Self
             where
                 I: IntoIterator<Item = T>, {
@@ -129,6 +149,7 @@ macro_rules! impl_tls_vec {
         impl<T: $($bounds + )*> From<Vec<T>>
             for $name<T>
         {
+            #[inline]
             fn from(v: Vec<T>) -> Self {
                 Self::new(v)
             }
@@ -137,6 +158,7 @@ macro_rules! impl_tls_vec {
         impl<T: $($bounds + )*> From<&[T]>
             for $name<T>
         {
+            #[inline]
             fn from(v: &[T]) -> Self {
                 Self::from_slice(v)
             }
@@ -145,6 +167,7 @@ macro_rules! impl_tls_vec {
         impl<T: $($bounds + )*> From<$name<T>>
             for Vec<T>
         {
+            #[inline]
             fn from(mut v: $name<T>) -> Self {
                 std::mem::take(&mut v.vec)
             }
@@ -153,6 +176,7 @@ macro_rules! impl_tls_vec {
         impl<T: $($bounds + )*> Default
             for $name<T>
         {
+            #[inline]
             fn default() -> Self {
                 Self { vec: Vec::new() }
             }

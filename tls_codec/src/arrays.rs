@@ -7,9 +7,13 @@ macro_rules! impl_array {
     ($($len:literal),*) => {
         $(
             impl Serialize for [u8; $len] {
-                fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-                    writer.write_all(self)?;
-                    Ok(())
+                fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+                    let written = writer.write(self)?;
+                    if written == $len {
+                        Ok(written)
+                    } else {
+                        Err(Error::InvalidWriteLength(format!("Expected to write {} bytes but only {} were written.", $len, written)))
+                    }
                 }
             }
 

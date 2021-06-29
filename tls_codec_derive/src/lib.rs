@@ -30,9 +30,15 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
 
                 let gen = quote! {
                     impl#generics tls_codec::Serialize for #ident#generics {
-                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
-                            #(self.#idents.tls_serialize(writer)?;)*
-                            Ok(())
+                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<usize, tls_codec::Error> {
+                            let mut written = 0usize;
+                            #(written += self.#idents.tls_serialize(writer)?;)*
+                            let expected_written = self.serialized_len();
+                            if written != expected_written {
+                                Err(tls_codec::Error::EncodingError(format!("Expected to serialize {} bytes but only {} were generated.", expected_written, written )))
+                            } else {
+                                Ok(written)
+                            }
                         }
                     }
 
@@ -45,9 +51,15 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
                     }
 
                     impl#generics tls_codec::Serialize for &#ident#generics {
-                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
-                            #(self.#idents3.tls_serialize(writer)?;)*
-                            Ok(())
+                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<usize, tls_codec::Error> {
+                            let mut written = 0usize;
+                            #(written += self.#idents3.tls_serialize(writer)?;)*
+                            let expected_written = self.serialized_len();
+                            if written != expected_written {
+                                Err(tls_codec::Error::EncodingError(format!("Expected to serialize {} bytes but only {} were generated.", expected_written, written )))
+                            } else {
+                                Ok(written)
+                            }
                         }
                     }
 
@@ -74,16 +86,28 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
 
                 let gen = quote! {
                     impl#generics tls_codec::Serialize for #ident#generics {
-                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
-                            #(self.#unnamed_indices.tls_serialize(writer)?;)*
-                            Ok(())
+                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<usize, tls_codec::Error> {
+                            let mut written = 0usize;
+                            #(written += self.#unnamed_indices.tls_serialize(writer)?;)*
+                            let expected_written = self.serialized_len();
+                            if written != expected_written {
+                                Err(tls_codec::Error::EncodingError(format!("Expected to serialize {} bytes but only {} were generated.", expected_written, written )))
+                            } else {
+                                Ok(written)
+                            }
                         }
                     }
 
                     impl#generics tls_codec::Serialize for &#ident#generics {
-                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
-                            #(self.#unnamed_indices4.tls_serialize(writer)?;)*
-                            Ok(())
+                        fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<usize, tls_codec::Error> {
+                            let mut written = 0usize;
+                            #(written += self.#unnamed_indices4.tls_serialize(writer)?;)*
+                            let expected_written = self.serialized_len();
+                            if written != expected_written {
+                                Err(tls_codec::Error::EncodingError(format!("Expected to serialize {} bytes but only {} were generated.", expected_written, written )))
+                            } else {
+                                Ok(written)
+                            }
                         }
                     }
 
@@ -134,7 +158,7 @@ fn impl_serialize(ast: DeriveInput) -> Result<TokenStream> {
 
             let gen = quote! {
                 impl#generics tls_codec::Serialize for #ident#generics {
-                    fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<(), tls_codec::Error> {
+                    fn tls_serialize<W: std::io::Write>(&self, writer: &mut W) -> core::result::Result<usize, tls_codec::Error> {
                         let enum_value: #repr = match self {
                             #(#variants)*
                         };

@@ -1,4 +1,4 @@
-use tls_codec::{Deserialize, TlsVecU8};
+use tls_codec::{Deserialize, Serialize, TlsSliceU16, TlsVecU16, TlsVecU8};
 
 #[test]
 fn deserialize_primitives() {
@@ -27,4 +27,13 @@ fn deserialize_tls_vec() {
 
     // It's empty now.
     assert!(u8::tls_deserialize(&mut b).is_err());
+
+    let long_vector = vec![77u8; 3000];
+    let serialized_long_vec = TlsSliceU16(&long_vector).tls_serialize_detached().unwrap();
+    let deserialized_long_vec: Vec<u8> =
+        TlsVecU16::tls_deserialize(&mut serialized_long_vec.as_slice())
+            .unwrap()
+            .into();
+    assert_eq!(long_vector.len(), deserialized_long_vec.len());
+    assert_eq!(long_vector, deserialized_long_vec);
 }

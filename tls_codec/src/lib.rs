@@ -26,7 +26,8 @@ mod arrays;
 mod primitives;
 mod tls_vec;
 pub use tls_vec::{
-    SecretTlsVecU16, SecretTlsVecU32, SecretTlsVecU8, TlsVecU16, TlsVecU32, TlsVecU8,
+    SecretTlsVecU16, SecretTlsVecU32, SecretTlsVecU8, TlsSliceU16, TlsSliceU32, TlsSliceU8,
+    TlsVecU16, TlsVecU32, TlsVecU8,
 };
 
 #[cfg(feature = "derive")]
@@ -36,10 +37,13 @@ pub use tls_codec_derive::{TlsDeserialize, TlsSerialize};
 #[derive(Debug, PartialEq, Clone)]
 pub enum Error {
     /// An error occurred during encoding.
-    EncodingError,
+    EncodingError(String),
 
     /// The length of a vector is invalid.
     InvalidVectorLength,
+
+    /// Error writing everything out.
+    InvalidWriteLength(String),
 
     /// Invalid input when trying to decode a primitive integer.
     InvalidInput,
@@ -88,12 +92,24 @@ pub trait TlsSize {
 /// * `tls_serialize` that takes a buffer to write the serialization to
 /// * `tls_serialize_detached` that returns a byte vector
 pub trait Serialize: TlsSize {
-    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
+    /// Serialize `self` and write it to the `writer`.
+    /// The function returns the number of bytes written to `writer`.
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error>;
 
+    /// Serialize `self` and return it as a byte vector.
     fn tls_serialize_detached(&self) -> Result<Vec<u8>, Error> {
         let mut buffer = Vec::with_capacity(self.serialized_len());
-        self.tls_serialize(&mut buffer)?;
-        Ok(buffer)
+        let written = self.tls_serialize(&mut buffer)?;
+        debug_assert_eq!(written, buffer.len());
+        if written != buffer.len() {
+            Err(Error::EncodingError(format!(
+                "Expected that {} bytes were written but the output holds {} bytes",
+                written,
+                buffer.len()
+            )))
+        } else {
+            Ok(buffer)
+        }
     }
 }
 

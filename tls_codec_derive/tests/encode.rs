@@ -1,4 +1,4 @@
-use tls_codec::{SecretTlsVecU16, Serialize, TlsVecU16, TlsVecU32};
+use tls_codec::{SecretTlsVecU16, Serialize, TlsSize, TlsSliceU16, TlsVecU16, TlsVecU32};
 use tls_codec_derive::TlsSerialize;
 
 #[derive(TlsSerialize, Debug)]
@@ -29,6 +29,34 @@ pub struct TupleStruct(ExtensionStruct, u8);
 #[derive(TlsSerialize, Debug)]
 pub struct StructWithLifetime<'a> {
     value: &'a TlsVecU16<u8>,
+}
+
+#[derive(TlsSerialize, Debug, Clone)]
+struct SomeValue {
+    val: TlsVecU16<u8>,
+}
+
+#[derive(TlsSerialize)]
+pub struct StructWithDoubleLifetime<'a, 'b> {
+    value: &'a TlsSliceU16<'a, &'b SomeValue>,
+}
+
+#[test]
+fn lifetime_struct() {
+    let value: TlsVecU16<u8> = vec![7u8; 33].into();
+    let s = StructWithLifetime { value: &value };
+    let serialized_s = s.tls_serialize_detached().unwrap();
+    assert_eq!(serialized_s, value.tls_serialize_detached().unwrap());
+
+    let some_default_value = SomeValue { val: value };
+    let values = vec![some_default_value; 33];
+    let ref_values: Vec<&SomeValue> = values.iter().map(|v| v).collect();
+    let ref_values_slice = TlsSliceU16(&ref_values);
+    let s = StructWithDoubleLifetime {
+        value: &ref_values_slice,
+    };
+    let serialized_s = s.tls_serialize_detached().unwrap();
+    assert_eq!(serialized_s, ref_values_slice.tls_serialize_detached().unwrap());
 }
 
 #[test]

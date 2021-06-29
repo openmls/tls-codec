@@ -16,6 +16,8 @@ serialization/deserialization
 - `SecretTlsVecU8`, `SecretTlsVecU16`, `SecretTlsVecU32`
   The same as the `TlsVec*` versions but it implements zeroize, requiring
   the elements to implement zeroize as well.
+- `TlsSliceU8`, `TlsSliceU16`, `TlsSliceU32` are lightweight wrapper for slices
+  that allow to serialize them without having to create a `TlsVec*`.
 - `[u8; l]`, for `l ∈ [1..128]`
 - Serialize for `Option<T>` where `T: Serialize`
 - Deserialize for `Option<T>` where `T: Deserialize`

@@ -15,7 +15,7 @@ impl<T: TlsSize> TlsSize for Option<T> {
 }
 
 impl<T: Serialize> Serialize for Option<T> {
-    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         match self {
             Some(e) => {
                 writer.write_all(&[1])?;
@@ -23,7 +23,7 @@ impl<T: Serialize> Serialize for Option<T> {
             }
             None => {
                 writer.write_all(&[0])?;
-                Ok(())
+                Ok(1)
             }
         }
     }
@@ -57,9 +57,9 @@ macro_rules! impl_unsigned {
         }
 
         impl Serialize for $t {
-            fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-                writer.write_all(&self.to_be_bytes())?;
-                Ok(())
+            fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+                let written = writer.write(&self.to_be_bytes())?;
+                Ok(written)
             }
         }
 

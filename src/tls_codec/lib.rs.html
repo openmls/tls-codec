@@ -127,6 +127,15 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! # TLS Codec</span>
 <span class="doccomment">//!</span>
@@ -143,9 +152,24 @@
 <span class="doccomment">//! * `SecretTlsVecU8`, `SecretTlsVecU16`, `SecretTlsVecU32`</span>
 <span class="doccomment">//!   The same as the `TlsVec*` versions but it implements zeroize, requiring</span>
 <span class="doccomment">//!   the elements to implement zeroize as well.</span>
+<span class="doccomment">//! * `TlsSliceU8`, `TlsSliceU16`, `TlsSliceU32` are lightweight wrapper for slices</span>
+<span class="doccomment">//!   that allow to serialize them without having to create a `TlsVec*`.</span>
 <span class="doccomment">//! * `[u8; l]`, for `l ∈ [1..128]`</span>
 <span class="doccomment">//! * Serialize for `Option&lt;T&gt;` where `T: Serialize`</span>
 <span class="doccomment">//! * Deserialize for `Option&lt;T&gt;` where `T: Deserialize`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ## Usage</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! use tls_codec::{TlsVecU8, Serialize, Deserialize};</span>
+<span class="doccomment">//! let mut b = &amp;[1u8, 4, 77, 88, 1, 99] as &amp;[u8];</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! let a = u8::tls_deserialize(&amp;mut b).expect(&quot;Unable to tls_deserialize&quot;);</span>
+<span class="doccomment">//! assert_eq!(1, a);</span>
+<span class="doccomment">//! println!(&quot;b: {:?}&quot;, b);</span>
+<span class="doccomment">//! let v = TlsVecU8::&lt;u8&gt;::tls_deserialize(&amp;mut b).expect(&quot;Unable to tls_deserialize&quot;);</span>
+<span class="doccomment">//! assert_eq!(&amp;[77, 88, 1, 99], v.as_slice());</span>
+<span class="doccomment">//! ```</span>
 
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">fmt::Display</span>,
@@ -186,12 +210,6 @@
 }
 
 <span class="kw">impl</span> <span class="ident">std::error::Error</span> <span class="kw">for</span> <span class="ident">Error</span> {}
-
-<span class="kw">impl</span> <span class="ident">Error</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">_description</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
-        <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)
-    }
-}
 
 <span class="kw">impl</span> <span class="ident">Display</span> <span class="kw">for</span> <span class="ident">Error</span> {
     <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">std::fmt::Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std::fmt::Result</span> {

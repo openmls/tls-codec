@@ -526,14 +526,18 @@ macro_rules! impl_tls_slice {
         impl<'a, T: TlsSize + Serialize> TlsSize for &$name<'a, T> {
             #[inline]
             fn serialized_len(&self) -> usize {
-                self.0.iter().fold($len_len, |acc, e| acc + e.serialized_len())
+                self.0
+                    .iter()
+                    .fold($len_len, |acc, e| acc + e.serialized_len())
             }
         }
 
         impl<'a, T: TlsSize + Serialize> TlsSize for $name<'a, T> {
             #[inline]
             fn serialized_len(&self) -> usize {
-                self.0.iter().fold($len_len, |acc, e| acc + e.serialized_len())
+                self.0
+                    .iter()
+                    .fold($len_len, |acc, e| acc + e.serialized_len())
             }
         }
     };

@@ -18,6 +18,19 @@
 //! * `[u8; l]`, for `l ∈ [1..128]`
 //! * Serialize for `Option<T>` where `T: Serialize`
 //! * Deserialize for `Option<T>` where `T: Deserialize`
+//!
+//! ## Usage
+//!
+//! ```
+//! use tls_codec::{TlsVecU8, Serialize, Deserialize};
+//! let mut b = &[1u8, 4, 77, 88, 1, 99] as &[u8];
+//!
+//! let a = u8::tls_deserialize(&mut b).expect("Unable to tls_deserialize");
+//! assert_eq!(1, a);
+//! println!("b: {:?}", b);
+//! let v = TlsVecU8::<u8>::tls_deserialize(&mut b).expect("Unable to tls_deserialize");
+//! assert_eq!(&[77, 88, 1, 99], v.as_slice());
+//! ```
 
 use std::{
     fmt::Display,

@@ -59,12 +59,6 @@ pub enum Error {
 
 impl std::error::Error for Error {}
 
-impl Error {
-    pub fn _description(&self) -> String {
-        format!("{:?}", self)
-    }
-}
-
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", self))

@@ -2,7 +2,6 @@
 //! Use this for any vector that is serialised.
 
 use std::{
-    convert::TryInto,
     io::{Read, Write},
     ops::Drop,
 };
@@ -11,7 +10,59 @@ use std::{
 use serde::ser::SerializeStruct;
 use zeroize::Zeroize;
 
-use crate::{Deserialize, Error, Serialize, TlsSize};
+use crate::{Deserialize, Error, Serialize, Size};
+
+macro_rules! impl_serialize {
+    ($self:ident, $size:ty, $name:ident, $len_len:literal ) => {
+        #[inline(always)]
+        fn serialize<W: Write>(&$self, writer: &mut W) -> Result<usize, Error> {
+            // Get the byte length of the content, make sure it's not too
+            // large and write it out.
+            let tls_serialized_len = $self.tls_serialized_len();
+            let byte_length = tls_serialized_len - $len_len;
+
+            let max_len = <$size>::MAX as usize;
+            let max_len = max_len - $len_len;
+            debug_assert!(
+                byte_length <= max_len,
+                "Vector length can't be encoded in the vector length a {} > {}",
+                max_len,
+                byte_length
+            );
+            if byte_length > max_len {
+                return Err(Error::InvalidVectorLength);
+            }
+
+            let mut written = (byte_length as $size).tls_serialize(writer)?;
+
+            // Now serialize the elements
+            for e in $self.as_slice().iter() {
+                written += e.tls_serialize(writer)?;
+            }
+
+            debug_assert_eq!(
+                written, tls_serialized_len,
+                "{} bytes should have been serialized but {} were written",
+                tls_serialized_len, written
+            );
+            if written != tls_serialized_len {
+                return Err(Error::EncodingError(format!(
+                    "{} bytes should have been serialized but {} were written",
+                    tls_serialized_len, written
+                )));
+            }
+            Ok(written)
+        }
+
+        /// The serialized len
+        #[inline(always)]
+        fn tls_serialized_length(&$self) -> usize {
+            $self.as_slice()
+                .iter()
+                .fold($len_len, |acc, e| acc + e.tls_serialized_len())
+        }
+    };
+}
 
 macro_rules! impl_tls_vec {
     ($size:ty, $name:ident, $len_len: literal, $($bounds: ident),*) => {
@@ -105,64 +156,22 @@ macro_rules! impl_tls_vec {
                 $len_len
             }
 
-            /// The serialization
-            #[inline(always)]
-            fn serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-                let len = self.vec.len();
-                let serialized_len = self.serialized_len();
-                let mut temp_buf = Vec::<u8>::with_capacity(serialized_len - $len_len);
-                let max_len = <$size>::MAX as usize;
-                if len > max_len {
-                    return Err(Error::InvalidVectorLength);
-                }
-                let mut written = 0usize;
-                for e in self.vec.iter() {
-                    written += e.tls_serialize(&mut temp_buf)?;
-                }
-                let max_len = max_len - $len_len;
-                debug_assert!(written < max_len);
-                if written > max_len {
-                    return Err(Error::InvalidVectorLength);
-                }
-                debug_assert_eq!(written, serialized_len - $len_len);
-                if written != serialized_len - $len_len {
-                    return Err(Error::EncodingError(format!("{} bytes should have been serialized but {} were written", serialized_len, written)));
-                }
-                written += (written as $size).tls_serialize(writer)?;
-                writer.write_all(&temp_buf)?;
-                Ok(written)
-            }
+            // This implements serialize and size for all versions
+            impl_serialize!(self, $size, $name, $len_len);
 
             /// The deserialization
             #[inline(always)]
             fn deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error> {
                 let mut result = Self { vec: Vec::new() };
                 let len = <$size>::tls_deserialize(bytes)?;
-                let mut sub = bytes.take(len.try_into()?);
-                loop {
-                    // XXX: check if this is efficient enough for things like u8
-                    let element = T::tls_deserialize(&mut sub);
-                    let element = match element {
-                        Ok(e) => e,
-                        Err(e) => {
-                            if e == Error::EndOfStream {
-                                break;
-                            } else {
-                                return Err(e);
-                            }
-                        }
-                    };
+                let mut read = len.tls_serialized_len();
+                let len_len = read;
+                while (read - len_len) < len as usize {
+                    let element = T::tls_deserialize(bytes)?;
+                    read += element.tls_serialized_len();
                     result.push(element);
                 }
                 Ok(result)
-            }
-
-            /// The serialized len
-            #[inline(always)]
-            fn serialized_length(&self) -> usize {
-                self.vec
-                    .iter()
-                    .fold($len_len, |acc, e| acc + e.serialized_len())
             }
         }
 
@@ -270,7 +279,7 @@ macro_rules! impl_tls_vec {
                 + Deserialize
                 + Clone
                 + PartialEq
-                + TlsSize
+                + Size
                 + $($bounds + )*
                 serde::de::Deserialize<'de>,
         {
@@ -324,7 +333,7 @@ macro_rules! impl_tls_vec {
                         + Deserialize
                         + Clone
                         + PartialEq
-                        + TlsSize
+                        + Size
                         + $($bounds + )*
                         serde::de::Deserialize<'de>,
                 {
@@ -378,12 +387,12 @@ macro_rules! impl_tls_vec {
             }
         }
 
-        impl<T: $($bounds + )*> TlsSize
+        impl<T: $($bounds + )*> Size
             for $name<T>
         {
             #[inline]
-            fn serialized_len(&self) -> usize {
-                self.serialized_length()
+            fn tls_serialized_len(&self) -> usize {
+                self.tls_serialized_length()
             }
         }
 
@@ -395,12 +404,12 @@ macro_rules! impl_tls_vec {
             }
         }
 
-        impl<T: $($bounds + )*> TlsSize
+        impl<T: $($bounds + )*> Size
             for &$name<T>
         {
             #[inline]
-            fn serialized_len(&self) -> usize {
-                self.serialized_length()
+            fn tls_serialized_len(&self) -> usize {
+                self.tls_serialized_length()
             }
         }
 
@@ -424,19 +433,17 @@ macro_rules! impl_secret_tls_vec {
             Deserialize,
             Clone,
             PartialEq,
-            TlsSize,
+            Size,
             Zeroize
         );
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize + Zeroize> Zeroize
-            for $name<T>
-        {
+        impl<T: Serialize + Deserialize + Clone + PartialEq + Size + Zeroize> Zeroize for $name<T> {
             fn zeroize(&mut self) {
                 self.vec.zeroize()
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + TlsSize + Zeroize> Drop for $name<T> {
+        impl<T: Serialize + Deserialize + Clone + PartialEq + Size + Zeroize> Drop for $name<T> {
             fn drop(&mut self) {
                 self.zeroize()
             }
@@ -454,10 +461,12 @@ macro_rules! impl_public_tls_vec {
             Deserialize,
             Clone,
             PartialEq,
-            TlsSize
+            Size
         );
     };
 }
+
+// TODO: #1 provide specialized TlsByteVec* versions holding u8 that are more efficient.
 
 impl_public_tls_vec!(u8, TlsVecU8, 1);
 impl_public_tls_vec!(u16, TlsVecU16, 2);
@@ -472,72 +481,42 @@ impl_secret_tls_vec!(u32, SecretTlsVecU32, 4);
 
 macro_rules! impl_tls_slice {
     ($size:ty, $name:ident, $len_len: literal) => {
-        pub struct $name<'a, T: TlsSize + Serialize>(pub &'a [T]);
+        pub struct $name<'a, T: Size + Serialize>(pub &'a [T]);
 
-        impl<'a, T: TlsSize + Serialize> $name<'a, T> {
-            fn serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-                let len = self.0.len();
-                let serialized_len = self.serialized_len();
-                let max_len = <$size>::MAX as usize;
-                if len > max_len {
-                    return Err(Error::InvalidVectorLength);
-                }
-
-                // Write the content of the slice to a temp buffer.
-                let mut written = 0usize;
-                let serialized_payload_len = serialized_len - $len_len;
-                let mut temp_buf = Vec::<u8>::with_capacity(serialized_payload_len);
-                for e in self.0.iter() {
-                    written += e.tls_serialize(&mut temp_buf)?;
-                }
-                let max_len = max_len - 1;
-                debug_assert!(written < max_len);
-                if written > max_len {
-                    return Err(Error::InvalidVectorLength);
-                }
-                debug_assert_eq!(written, serialized_payload_len);
-                if written != serialized_payload_len {
-                    return Err(Error::EncodingError(format!(
-                        "{} bytes should have been serialized but {} were written",
-                        serialized_len, written
-                    )));
-                }
-
-                // Actually write to the output writer
-                written += (written as $size).tls_serialize(writer)?;
-                writer.write_all(&temp_buf)?;
-
-                Ok(written)
+        impl<'a, T: Size + Serialize> $name<'a, T> {
+            #[inline(always)]
+            fn as_slice(&self) -> &[T] {
+                &self.0
             }
         }
 
-        impl<'a, T: TlsSize + Serialize> Serialize for &$name<'a, T> {
+        impl<'a, T: Size + Serialize> $name<'a, T> {
+            impl_serialize!(self, $size, $name, $len_len);
+        }
+
+        impl<'a, T: Size + Serialize> Serialize for &$name<'a, T> {
             fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
                 self.serialize(writer)
             }
         }
 
-        impl<'a, T: TlsSize + Serialize> Serialize for $name<'a, T> {
+        impl<'a, T: Size + Serialize> Serialize for $name<'a, T> {
             fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
                 self.serialize(writer)
             }
         }
 
-        impl<'a, T: TlsSize + Serialize> TlsSize for &$name<'a, T> {
+        impl<'a, T: Size + Serialize> Size for &$name<'a, T> {
             #[inline]
-            fn serialized_len(&self) -> usize {
-                self.0
-                    .iter()
-                    .fold($len_len, |acc, e| acc + e.serialized_len())
+            fn tls_serialized_len(&self) -> usize {
+                self.tls_serialized_length()
             }
         }
 
-        impl<'a, T: TlsSize + Serialize> TlsSize for $name<'a, T> {
+        impl<'a, T: Size + Serialize> Size for $name<'a, T> {
             #[inline]
-            fn serialized_len(&self) -> usize {
-                self.0
-                    .iter()
-                    .fold($len_len, |acc, e| acc + e.serialized_len())
+            fn tls_serialized_len(&self) -> usize {
+                self.tls_serialized_length()
             }
         }
     };

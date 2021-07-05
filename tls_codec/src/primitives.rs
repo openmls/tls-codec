@@ -1,14 +1,14 @@
 //! Codec implementations for unsigned integer primitives.
 
-use super::{Deserialize, Error, Serialize, TlsSize};
+use super::{Deserialize, Error, Serialize, Size};
 
 use std::io::{Read, Write};
 
-impl<T: TlsSize> TlsSize for Option<T> {
+impl<T: Size> Size for Option<T> {
     #[inline]
-    fn serialized_len(&self) -> usize {
+    fn tls_serialized_len(&self) -> usize {
         1 + match self {
-            Some(v) => v.serialized_len(),
+            Some(v) => v.tls_serialized_len(),
             None => 0,
         }
     }
@@ -18,8 +18,9 @@ impl<T: Serialize> Serialize for Option<T> {
     fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         match self {
             Some(e) => {
-                writer.write_all(&[1])?;
-                e.tls_serialize(writer)
+                let written = writer.write(&[1])?;
+                debug_assert_eq!(written, 1);
+                e.tls_serialize(writer).map(|l| l + 1)
             }
             None => {
                 writer.write_all(&[0])?;
@@ -63,9 +64,9 @@ macro_rules! impl_unsigned {
             }
         }
 
-        impl TlsSize for $t {
+        impl Size for $t {
             #[inline]
-            fn serialized_len(&self) -> usize {
+            fn tls_serialized_len(&self) -> usize {
                 $bytes
             }
         }

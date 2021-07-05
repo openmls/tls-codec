@@ -1,7 +1,7 @@
-use tls_codec::{SecretTlsVecU16, Serialize, TlsSize, TlsSliceU16, TlsVecU16, TlsVecU32};
-use tls_codec_derive::TlsSerialize;
+use tls_codec::{SecretTlsVecU16, Serialize, Size, TlsSliceU16, TlsVecU16, TlsVecU32};
+use tls_codec_derive::{TlsSerialize, TlsSize};
 
-#[derive(TlsSerialize, Debug)]
+#[derive(TlsSerialize, TlsSize, Debug)]
 #[repr(u16)]
 pub enum ExtensionType {
     Reserved = 0,
@@ -13,30 +13,30 @@ pub enum ExtensionType {
     SomethingElse = 500,
 }
 
-#[derive(TlsSerialize, Debug)]
+#[derive(TlsSerialize, TlsSize, Debug)]
 pub struct ExtensionStruct {
     extension_type: ExtensionType,
     extension_data: TlsVecU32<u8>,
     additional_data: Option<SecretTlsVecU16<u8>>,
 }
 
-#[derive(TlsSerialize, Debug)]
+#[derive(TlsSerialize, TlsSize, Debug)]
 pub struct TupleStruct1(ExtensionStruct);
 
-#[derive(TlsSerialize, Debug)]
+#[derive(TlsSerialize, TlsSize, Debug)]
 pub struct TupleStruct(ExtensionStruct, u8);
 
-#[derive(TlsSerialize, Debug)]
+#[derive(TlsSerialize, TlsSize, Debug)]
 pub struct StructWithLifetime<'a> {
     value: &'a TlsVecU16<u8>,
 }
 
-#[derive(TlsSerialize, Debug, Clone)]
+#[derive(TlsSerialize, TlsSize, Debug, Clone)]
 struct SomeValue {
     val: TlsVecU16<u8>,
 }
 
-#[derive(TlsSerialize)]
+#[derive(TlsSerialize, TlsSize)]
 pub struct StructWithDoubleLifetime<'a, 'b> {
     value: &'a TlsSliceU16<'a, &'b SomeValue>,
 }
@@ -56,7 +56,10 @@ fn lifetime_struct() {
         value: &ref_values_slice,
     };
     let serialized_s = s.tls_serialize_detached().unwrap();
-    assert_eq!(serialized_s, ref_values_slice.tls_serialize_detached().unwrap());
+    assert_eq!(
+        serialized_s,
+        ref_values_slice.tls_serialize_detached().unwrap()
+    );
 }
 
 #[test]

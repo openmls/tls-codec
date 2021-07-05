@@ -1,7 +1,7 @@
-use tls_codec::{Deserialize, Serialize, TlsSize, TlsSliceU16, TlsVecU16, TlsVecU32, TlsVecU8};
-use tls_codec_derive::{TlsDeserialize, TlsSerialize};
+use tls_codec::{Deserialize, Serialize, Size, TlsSliceU16, TlsVecU16, TlsVecU32, TlsVecU8};
+use tls_codec_derive::{TlsDeserialize, TlsSerialize, TlsSize};
 
-#[derive(TlsDeserialize, Debug, PartialEq, Clone, Copy, TlsSerialize)]
+#[derive(TlsDeserialize, Debug, PartialEq, Clone, Copy, TlsSize, TlsSerialize)]
 #[repr(u16)]
 pub enum ExtensionType {
     Reserved = 0,
@@ -19,26 +19,26 @@ impl Default for ExtensionType {
     }
 }
 
-#[derive(TlsDeserialize, Debug, PartialEq, TlsSerialize, Clone, Default)]
+#[derive(TlsDeserialize, Debug, PartialEq, TlsSerialize, TlsSize, Clone, Default)]
 pub struct ExtensionStruct {
     extension_type: ExtensionType,
     extension_data: TlsVecU32<u8>,
 }
 
-#[derive(TlsDeserialize, Debug, PartialEq, TlsSerialize)]
+#[derive(TlsDeserialize, Debug, PartialEq, TlsSize, TlsSerialize)]
 pub struct ExtensionTypeVec {
     data: TlsVecU8<ExtensionType>,
 }
 
-#[derive(TlsDeserialize, Debug, PartialEq, TlsSerialize)]
+#[derive(TlsDeserialize, Debug, PartialEq, TlsSize, TlsSerialize)]
 pub struct ArrayWrap {
     data: [u8; 8],
 }
 
-#[derive(TlsSerialize, TlsDeserialize, Debug, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Debug, PartialEq)]
 pub struct TupleStruct1(ExtensionStruct);
 
-#[derive(TlsSerialize, TlsDeserialize, Debug, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Debug, PartialEq)]
 pub struct TupleStruct(ExtensionStruct, u8);
 
 #[test]
@@ -139,47 +139,50 @@ fn simple_struct() {
     assert_eq!(extension, deserialized);
 }
 
+#[derive(TlsDeserialize, Clone, TlsSize, PartialEq)]
+struct DeserializeOnlyStruct(u16);
+
 // KAT from MLS
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 #[repr(u8)]
 enum ProtocolVersion {
     Reserved = 0,
     Mls10 = 1,
 }
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct CipherSuite(u16);
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct HPKEPublicKey(TlsVecU16<u8>);
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct CredentialType(u16);
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct SignatureScheme(u16);
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct BasicCredential {
     identity: TlsVecU16<u8>,
     signature_scheme: SignatureScheme,
     signature_key: TlsVecU16<u8>,
 }
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct Credential {
     credential_type: CredentialType,
     credential: BasicCredential,
 }
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct Extension {
     extension_type: ExtensionType,
     extension_data: TlsVecU32<u8>,
 }
 
-#[derive(TlsSerialize, TlsDeserialize, Clone, PartialEq)]
+#[derive(TlsSerialize, TlsDeserialize, TlsSize, Clone, PartialEq)]
 struct KeyPackage {
     version: ProtocolVersion,
     cipher_suite: CipherSuite,

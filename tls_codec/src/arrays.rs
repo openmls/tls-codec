@@ -1,6 +1,6 @@
 //! Implement the TLS codec for some byte arrays.
 
-use super::{Deserialize, Error, Serialize, TlsSize};
+use super::{Deserialize, Error, Serialize, Size};
 use std::io::{Read, Write};
 
 macro_rules! impl_array {
@@ -25,9 +25,9 @@ macro_rules! impl_array {
                 }
             }
 
-            impl TlsSize for [u8; $len] {
+            impl Size for [u8; $len] {
                 #[inline]
-                fn serialized_len(&self) -> usize {
+                fn tls_serialized_len(&self) -> usize {
                     $len
                 }
             }

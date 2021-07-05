@@ -3,8 +3,9 @@
 //! This crate implements the TLS codec as defined in [RFC 8446](https://tools.ietf.org/html/rfc8446)
 //! as well as some extensions required by MLS.
 //!
-//! With the feature `derive` `TlsSerialize` and `TlsDeserialize` can be
-//! derived.
+//! With the feature `derive` `TlsSerialize`, `TlsDeserialize`, and `TlsSize`
+//! can be derived.
+//! Note that `TlsSerialize` and `TlsDeserialize` both require `TlsSize`.
 //!
 //! This crate provides the following data structures that implement TLS
 //! serialization/deserialization
@@ -46,7 +47,7 @@ pub use tls_vec::{
 };
 
 #[cfg(feature = "derive")]
-pub use tls_codec_derive::{TlsDeserialize, TlsSerialize};
+pub use tls_codec_derive::{TlsDeserialize, TlsSerialize, TlsSize};
 
 /// Errors that are thrown by this crate.
 #[derive(Debug, PartialEq, Clone)]
@@ -87,12 +88,12 @@ impl From<std::io::Error> for Error {
     }
 }
 
-/// The `TlsSize` trait needs to be implemented by any struct that should be
+/// The `Size` trait needs to be implemented by any struct that should be
 /// efficiently serialized.
 /// This allows to collect the length of a serialized structure before allocating
 /// memory.
-pub trait TlsSize {
-    fn serialized_len(&self) -> usize;
+pub trait Size {
+    fn tls_serialized_len(&self) -> usize;
 }
 
 /// The `Serialize` trait provides functions to serialize a struct or enum.
@@ -100,16 +101,22 @@ pub trait TlsSize {
 /// The trait provides two functions:
 /// * `tls_serialize` that takes a buffer to write the serialization to
 /// * `tls_serialize_detached` that returns a byte vector
-pub trait Serialize: TlsSize {
+pub trait Serialize: Size {
     /// Serialize `self` and write it to the `writer`.
     /// The function returns the number of bytes written to `writer`.
     fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error>;
 
     /// Serialize `self` and return it as a byte vector.
     fn tls_serialize_detached(&self) -> Result<Vec<u8>, Error> {
-        let mut buffer = Vec::with_capacity(self.serialized_len());
+        let mut buffer = Vec::with_capacity(self.tls_serialized_len());
         let written = self.tls_serialize(&mut buffer)?;
-        debug_assert_eq!(written, buffer.len());
+        debug_assert_eq!(
+            written,
+            buffer.len(),
+            "Expected that {} bytes were written but the output holds {} bytes",
+            written,
+            buffer.len()
+        );
         if written != buffer.len() {
             Err(Error::EncodingError(format!(
                 "Expected that {} bytes were written but the output holds {} bytes",
@@ -122,13 +129,13 @@ pub trait Serialize: TlsSize {
     }
 }
 
-/// The `Deserialize` trait provides functions to deserialize a byte slice to a
+/// The `Deserialize` trait defines functions to deserialize a byte slice to a
 /// struct or enum.
-///
-/// The trait provides one function:
-/// * `tls_deserialize` takes a [`std::io::Read`] to read from.
-///                     This will usually be a byte slice.
-pub trait Deserialize {
+pub trait Deserialize: Size {
+    /// This function deserializes the `bytes` from the provided a [`std::io::Read`]
+    /// and returns the populated struct.
+    ///
+    /// In order to get the amount of bytes read, use [`TlsSize::serialized_len`].
     fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error>
     where
         Self: Sized;

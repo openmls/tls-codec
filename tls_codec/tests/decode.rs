@@ -56,7 +56,7 @@ fn deserialize_tls_byte_vec() {
     assert_eq!(1, a);
     assert_eq!(1, a.tls_serialized_len());
     println!("b: {:?}", b);
-    let v = TlsByteVecU8::<u8>::tls_deserialize(&mut b).expect("Unable to tls_deserialize");
+    let v = TlsByteVecU8::tls_deserialize(&mut b).expect("Unable to tls_deserialize");
     assert_eq!(5, v.tls_serialized_len());
     assert_eq!(&[77, 88, 1, 99], v.as_slice());
 
@@ -68,7 +68,7 @@ fn deserialize_tls_byte_vec() {
         .tls_serialize_detached()
         .unwrap();
     let deserialized_long_vec =
-        TlsByteVecU16::<u8>::tls_deserialize(&mut serialized_long_vec.as_slice()).unwrap();
+        TlsByteVecU16::tls_deserialize(&mut serialized_long_vec.as_slice()).unwrap();
     assert_eq!(
         deserialized_long_vec.tls_serialized_len(),
         long_vector.len() + 2

@@ -1,6 +1,9 @@
 //! A vector with a length field for TLS serialisation.
 //! Use this for any vector that is serialised.
 
+// TODO: share code between the different implementations. There's too much
+//       duplicate code in here.
+
 use std::{
     io::{Read, Write},
     ops::Drop,
@@ -206,33 +209,33 @@ macro_rules! impl_tls_vec_codec_generic {
 
 macro_rules! impl_tls_vec_codec_bytes {
     ($size:ty, $name:ident, $len_len: literal) => {
-        impl Serialize for $name<u8> {
+        impl Serialize for $name {
             fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
                 self.serialize_bytes(writer)
             }
         }
 
-        impl Size for $name<u8> {
+        impl Size for $name {
             #[inline]
             fn tls_serialized_len(&self) -> usize {
                 self.tls_serialized_byte_length()
             }
         }
 
-        impl Serialize for &$name<u8> {
+        impl Serialize for &$name {
             fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
                 self.serialize_bytes(writer)
             }
         }
 
-        impl Size for &$name<u8> {
+        impl Size for &$name {
             #[inline]
             fn tls_serialized_len(&self) -> usize {
                 self.tls_serialized_byte_length()
             }
         }
 
-        impl Deserialize for $name<u8> {
+        impl Deserialize for $name {
             fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error> {
                 Self::deserialize_bytes(bytes)
             }
@@ -240,7 +243,95 @@ macro_rules! impl_tls_vec_codec_bytes {
     };
 }
 
-macro_rules! impl_tls_vec {
+macro_rules! impl_vec_members {
+    ($element_type:ident, $len_len:literal) => {
+        /// Create a new `TlsVec` from a Rust Vec.
+        #[inline]
+        pub fn new(vec: Vec<$element_type>) -> Self {
+            Self { vec }
+        }
+
+        /// Create a new `TlsVec` from a slice.
+        #[inline]
+        pub fn from_slice(slice: &[$element_type]) -> Self {
+            Self {
+                vec: slice.to_vec(),
+            }
+        }
+
+        /// Get the length of the vector.
+        #[inline]
+        pub fn len(&self) -> usize {
+            self.vec.len()
+        }
+
+        /// Get a slice to the raw vector.
+        #[inline]
+        pub fn as_slice(&self) -> &[$element_type] {
+            &self.vec
+        }
+
+        /// Get a copy of the underlying vector.
+        #[inline]
+        pub fn to_vec(&self) -> Vec<$element_type> {
+            self.vec.clone()
+        }
+
+        /// Check if the vector is empty.
+        #[inline]
+        pub fn is_empty(&self) -> bool {
+            self.vec.is_empty()
+        }
+
+        /// Get the underlying vector and consume this.
+        #[inline]
+        pub fn into_vec(mut self) -> Vec<$element_type> {
+            std::mem::take(&mut self.vec)
+        }
+
+        /// Add an element to this.
+        #[inline]
+        pub fn push(&mut self, value: $element_type) {
+            self.vec.push(value);
+        }
+
+        /// Remove the last element.
+        #[inline]
+        pub fn pop(&mut self) -> Option<$element_type> {
+            self.vec.pop()
+        }
+
+        /// Returns a reference to an element or subslice depending on the type of index.
+        /// XXX: implement SliceIndex instead
+        #[inline]
+        pub fn get(&self, index: usize) -> Option<&$element_type> {
+            self.vec.get(index)
+        }
+
+        /// Returns an iterator over the slice.
+        #[inline]
+        pub fn iter(&self) -> std::slice::Iter<'_, $element_type> {
+            self.vec.iter()
+        }
+
+        /// Retains only the elements specified by the predicate.
+        #[inline]
+        pub fn retain<F>(&mut self, f: F)
+        where
+            F: FnMut(&$element_type) -> bool,
+        {
+            self.vec.retain(f)
+        }
+
+        /// Get the number of bytes used for the length encoding.
+        #[inline(always)]
+        pub fn len_len() -> usize {
+            $len_len
+        }
+    };
+}
+
+macro_rules! impl_tls_vec_generic {
     ($size:ty, $name:ident, $len_len: literal, $($bounds:ident),*) => {
         #[derive(Eq, Clone, Debug)]
         pub struct $name<T: $($bounds + )*> {
@@ -248,89 +339,7 @@ macro_rules! impl_tls_vec {
         }
 
         impl<T: $($bounds + )*> $name<T> {
-            /// Create a new `TlsVec` from a Rust Vec.
-            #[inline]
-            pub fn new(vec: Vec<T>) -> Self {
-                Self { vec }
-            }
-
-            /// Create a new `TlsVec` from a slice.
-            #[inline]
-            pub fn from_slice(slice: &[T]) -> Self {
-                Self {
-                    vec: slice.to_vec(),
-                }
-            }
-
-            /// Get the length of the vector.
-            #[inline]
-            pub fn len(&self) -> usize {
-                self.vec.len()
-            }
-
-            /// Get a slice to the raw vector.
-            #[inline]
-            pub fn as_slice(&self) -> &[T] {
-                &self.vec
-            }
-
-            /// Get a copy of the underlying vector.
-            #[inline]
-            pub fn to_vec(&self) -> Vec<T> {
-                self.vec.clone()
-            }
-
-            /// Check if the vector is empty.
-            #[inline]
-            pub fn is_empty(&self) -> bool {
-                self.vec.is_empty()
-            }
-
-            /// Get the underlying vector and consume this.
-            #[inline]
-            pub fn into_vec(mut self) -> Vec<T> {
-                std::mem::take(&mut self.vec)
-            }
-
-            /// Add an element to this.
-            #[inline]
-            pub fn push(&mut self, value: T) {
-                self.vec.push(value);
-            }
-
-            /// Remove the last element.
-            #[inline]
-            pub fn pop(&mut self) -> Option<T> {
-                self.vec.pop()
-            }
-
-            /// Returns a reference to an element or subslice depending on the type of index.
-            /// XXX: implement SliceIndex instead
-            #[inline]
-            pub fn get(&self, index: usize) -> Option<&T> {
-                self.vec.get(index)
-            }
-
-            /// Returns an iterator over the slice.
-            #[inline]
-            pub fn iter(&self) -> std::slice::Iter<'_, T> {
-                self.vec.iter()
-            }
-
-            /// Retains only the elements specified by the predicate.
-            #[inline]
-            pub fn retain<F>(&mut self, f: F)
-            where
-                F: FnMut(&T) -> bool,
-            {
-                self.vec.retain(f)
-            }
-
-            /// Get the number of bytes used for the length encoding.
-            #[inline(always)]
-            pub fn len_len() -> usize {
-                $len_len
-            }
+            impl_vec_members!(T, $len_len);
         }
 
         impl<T: std::hash::Hash + $($bounds + )*> std::hash::Hash for $name<T> {
@@ -539,9 +548,198 @@ macro_rules! impl_tls_vec {
     };
 }
 
+macro_rules! impl_tls_vec {
+    ($name:ident, $len_len:literal) => {
+        #[derive(Eq, Clone, Debug)]
+        pub struct $name {
+            vec: Vec<u8>,
+        }
+
+        impl $name {
+            impl_vec_members!(u8, 1);
+        }
+
+        impl std::hash::Hash for $name {
+            #[inline]
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.vec.hash(state)
+            }
+        }
+
+        impl std::ops::Index<usize> for $name {
+            type Output = u8;
+
+            #[inline]
+            fn index(&self, i: usize) -> &u8 {
+                self.vec.index(i)
+            }
+        }
+
+        impl std::cmp::PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.vec.eq(&other.vec)
+            }
+        }
+
+        impl std::ops::IndexMut<usize> for $name {
+            #[inline]
+            fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+                self.vec.index_mut(i)
+            }
+        }
+
+        impl std::borrow::Borrow<[u8]> for $name {
+            #[inline]
+            fn borrow(&self) -> &[u8] {
+                &self.vec
+            }
+        }
+
+        impl std::iter::FromIterator<u8> for $name {
+            #[inline]
+            fn from_iter<I>(iter: I) -> Self
+            where
+                I: IntoIterator<Item = u8>,
+            {
+                let vec = Vec::<u8>::from_iter(iter);
+                Self { vec }
+            }
+        }
+
+        impl From<Vec<u8>> for $name {
+            #[inline]
+            fn from(v: Vec<u8>) -> Self {
+                Self::new(v)
+            }
+        }
+
+        impl From<&[u8]> for $name {
+            #[inline]
+            fn from(v: &[u8]) -> Self {
+                Self::from_slice(v)
+            }
+        }
+
+        impl From<$name> for Vec<u8> {
+            #[inline]
+            fn from(mut v: $name) -> Self {
+                std::mem::take(&mut v.vec)
+            }
+        }
+
+        impl Default for $name {
+            #[inline]
+            fn default() -> Self {
+                Self { vec: Vec::new() }
+            }
+        }
+
+        #[cfg(feature = "serde_serialize")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let mut state = serializer.serialize_struct(stringify!($name), 1)?;
+                state.serialize_field("vec", &self.vec)?;
+                state.end()
+            }
+        }
+
+        #[cfg(feature = "serde_serialize")]
+        impl<'de> serde::de::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::de::Deserializer<'de>,
+            {
+                enum Field {
+                    Vec,
+                }
+
+                impl<'de> serde::de::Deserialize<'de> for Field {
+                    fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+                    where
+                        D: serde::de::Deserializer<'de>,
+                    {
+                        struct FieldVisitor;
+
+                        impl<'de> serde::de::Visitor<'de> for FieldVisitor {
+                            type Value = Field;
+
+                            fn expecting(
+                                &self,
+                                formatter: &mut std::fmt::Formatter,
+                            ) -> std::fmt::Result {
+                                formatter.write_str("`vec`")
+                            }
+
+                            fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                            where
+                                E: serde::de::Error,
+                            {
+                                match value {
+                                    "vec" => Ok(Field::Vec),
+                                    _ => Err(serde::de::Error::unknown_field(value, &["vec"])),
+                                }
+                            }
+                        }
+
+                        deserializer.deserialize_identifier(FieldVisitor)
+                    }
+                }
+
+                struct TlsVecVisitor {
+                    data: std::marker::PhantomData<u8>,
+                }
+
+                impl<'de> serde::de::Visitor<'de> for TlsVecVisitor {
+                    type Value = $name;
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_fmt(format_args!("struct {}", stringify!($name)))
+                    }
+                    fn visit_seq<V>(self, mut seq: V) -> Result<$name, V::Error>
+                    where
+                        V: serde::de::SeqAccess<'de>,
+                    {
+                        let vec = seq
+                            .next_element()?
+                            .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                        Ok($name::new(vec))
+                    }
+                    fn visit_map<V>(self, mut map: V) -> Result<$name, V::Error>
+                    where
+                        V: serde::de::MapAccess<'de>,
+                    {
+                        let mut vec = None;
+                        while let Some(key) = map.next_key()? {
+                            match key {
+                                Field::Vec => {
+                                    if vec.is_some() {
+                                        return Err(serde::de::Error::duplicate_field("vec"));
+                                    }
+                                    vec = Some(map.next_value()?);
+                                }
+                            }
+                        }
+                        let vec = vec.ok_or_else(|| serde::de::Error::missing_field("vec"))?;
+                        Ok($name::new(vec))
+                    }
+                }
+                deserializer.deserialize_struct(
+                    stringify!($name),
+                    &["vec"],
+                    TlsVecVisitor {
+                        data: std::marker::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+}
+
 macro_rules! impl_secret_tls_vec {
     ($size:ty, $name:ident, $len_len: literal) => {
-        impl_tls_vec!(
+        impl_tls_vec_generic!(
             $size,
             $name,
             $len_len,
@@ -587,7 +785,7 @@ macro_rules! impl_secret_tls_vec {
 
 macro_rules! impl_public_tls_vec {
     ($size:ty, $name:ident, $len_len: literal) => {
-        impl_tls_vec!(
+        impl_tls_vec_generic!(
             $size,
             $name,
             $len_len,
@@ -618,20 +816,11 @@ macro_rules! impl_public_tls_vec {
     };
 }
 
-macro_rules! impl_public_tls_byte_vec {
+macro_rules! impl_tls_byte_vec {
     ($size:ty, $name:ident, $len_len: literal) => {
-        impl_tls_vec!(
-            $size,
-            $name,
-            $len_len,
-            Serialize,
-            Deserialize,
-            Clone,
-            PartialEq,
-            Size
-        );
+        impl_tls_vec!($name, $len_len);
 
-        impl $name<u8> {
+        impl $name {
             // This implements serialize and size for all versions
             impl_byte_serialize!(self, $size, $name, $len_len);
             impl_byte_size!(self, $size, $name, $len_len);
@@ -648,9 +837,9 @@ impl_public_tls_vec!(u8, TlsVecU8, 1);
 impl_public_tls_vec!(u16, TlsVecU16, 2);
 impl_public_tls_vec!(u32, TlsVecU32, 4);
 
-impl_public_tls_byte_vec!(u8, TlsByteVecU8, 1);
-impl_public_tls_byte_vec!(u16, TlsByteVecU16, 2);
-impl_public_tls_byte_vec!(u32, TlsByteVecU32, 4);
+impl_tls_byte_vec!(u8, TlsByteVecU8, 1);
+impl_tls_byte_vec!(u16, TlsByteVecU16, 2);
+impl_tls_byte_vec!(u32, TlsByteVecU32, 4);
 
 // Secrets should be put into these Secret tls vectors as they implement zeroize.
 impl_secret_tls_vec!(u8, SecretTlsVecU8, 1);

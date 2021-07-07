@@ -16,6 +16,9 @@
 //!   the elements to implement zeroize as well.
 //! * `TlsSliceU8`, `TlsSliceU16`, `TlsSliceU32` are lightweight wrapper for slices
 //!   that allow to serialize them without having to create a `TlsVec*`.
+//! * `TlsByteSliceU8`, `TlsByteSliceU16`, `TlsByteSliceU32`, and
+//!   `TlsByteVecU8`, `TlsByteVecU16`, `TlsByteVecU32`
+//!   are provided with optimized implementations for byte vectors.
 //! * `[u8; l]`, for `l ∈ [1..128]`
 //! * Serialize for `Option<T>` where `T: Serialize`
 //! * Deserialize for `Option<T>` where `T: Deserialize`
@@ -42,8 +45,9 @@ mod arrays;
 mod primitives;
 mod tls_vec;
 pub use tls_vec::{
-    SecretTlsVecU16, SecretTlsVecU32, SecretTlsVecU8, TlsSliceU16, TlsSliceU32, TlsSliceU8,
-    TlsVecU16, TlsVecU32, TlsVecU8,
+    SecretTlsVecU16, SecretTlsVecU32, SecretTlsVecU8, TlsByteSliceU16, TlsByteSliceU32,
+    TlsByteSliceU8, TlsByteVecU16, TlsByteVecU32, TlsByteVecU8, TlsSliceU16, TlsSliceU32,
+    TlsSliceU8, TlsVecU16, TlsVecU32, TlsVecU8,
 };
 
 #[cfg(feature = "derive")]

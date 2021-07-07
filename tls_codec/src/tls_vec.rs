@@ -40,7 +40,7 @@ macro_rules! impl_byte_deserialize {
         fn deserialize_bytes<R: Read>(bytes: &mut R) -> Result<Self, Error> {
             let len = <$size>::tls_deserialize(bytes)? as usize;
             let mut result = Self {
-                vec: Vec::with_capacity(len),
+                vec: vec![0u8; len],
             };
             let read = bytes.read(result.vec.as_mut_slice())?;
             debug_assert_eq!(read, len);

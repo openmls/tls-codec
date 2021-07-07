@@ -1,7 +1,7 @@
 //! A vector with a length field for TLS serialisation.
 //! Use this for any vector that is serialised.
 
-// TODO: share code between the different implementations. There's too much
+// TODO: #2 share code between the different implementations. There's too much
 //       duplicate code in here.
 
 use std::{

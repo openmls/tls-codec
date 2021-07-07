@@ -85,18 +85,19 @@
 <span id="82">82</span>
 <span id="83">83</span>
 <span id="84">84</span>
+<span id="85">85</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Codec implementations for unsigned integer primitives.</span>
 
-<span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">Deserialize</span>, <span class="ident">Error</span>, <span class="ident">Serialize</span>, <span class="ident">TlsSize</span>};
+<span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">Deserialize</span>, <span class="ident">Error</span>, <span class="ident">Serialize</span>, <span class="ident">Size</span>};
 
 <span class="kw">use</span> <span class="ident">std::io</span>::{<span class="ident">Read</span>, <span class="ident">Write</span>};
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">TlsSize</span><span class="op">&gt;</span> <span class="ident">TlsSize</span> <span class="kw">for</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Size</span><span class="op">&gt;</span> <span class="ident">Size</span> <span class="kw">for</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">fn</span> <span class="ident">tls_serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
         <span class="number">1</span> <span class="op">+</span> <span class="kw">match</span> <span class="self">self</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">serialized_len</span>(),
+            <span class="prelude-val">Some</span>(<span class="ident">v</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">v</span>.<span class="ident">tls_serialized_len</span>(),
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="number">0</span>,
         }
     }
@@ -106,8 +107,9 @@
     <span class="kw">fn</span> <span class="ident">tls_serialize</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">W</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="self">self</span> {
             <span class="prelude-val">Some</span>(<span class="ident">e</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span>[<span class="number">1</span>])<span class="question-mark">?</span>;
-                <span class="ident">e</span>.<span class="ident">tls_serialize</span>(<span class="ident">writer</span>)
+                <span class="kw">let</span> <span class="ident">written</span> <span class="op">=</span> <span class="ident">writer</span>.<span class="ident">write</span>(<span class="kw-2">&amp;</span>[<span class="number">1</span>])<span class="question-mark">?</span>;
+                <span class="macro">debug_assert_eq!</span>(<span class="ident">written</span>, <span class="number">1</span>);
+                <span class="ident">e</span>.<span class="ident">tls_serialize</span>(<span class="ident">writer</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">l</span><span class="op">|</span> <span class="ident">l</span> <span class="op">+</span> <span class="number">1</span>)
             }
             <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> {
                 <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span>[<span class="number">0</span>])<span class="question-mark">?</span>;
@@ -151,9 +153,9 @@
             }
         }
 
-        <span class="kw">impl</span> <span class="ident">TlsSize</span> <span class="kw">for</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">t</span> {
+        <span class="kw">impl</span> <span class="ident">Size</span> <span class="kw">for</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">t</span> {
             <span class="attribute">#[<span class="ident">inline</span>]</span>
-            <span class="kw">fn</span> <span class="ident">serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+            <span class="kw">fn</span> <span class="ident">tls_serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">bytes</span>
             }
         }

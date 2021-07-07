@@ -136,14 +136,26 @@
 <span id="133">133</span>
 <span id="134">134</span>
 <span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! # TLS Codec</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! This crate implements the TLS codec as defined in [RFC 8446](https://tools.ietf.org/html/rfc8446)</span>
 <span class="doccomment">//! as well as some extensions required by MLS.</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! With the feature `derive` `TlsSerialize` and `TlsDeserialize` can be</span>
-<span class="doccomment">//! derived.</span>
+<span class="doccomment">//! With the feature `derive` `TlsSerialize`, `TlsDeserialize`, and `TlsSize`</span>
+<span class="doccomment">//! can be derived.</span>
+<span class="doccomment">//! Note that `TlsSerialize` and `TlsDeserialize` both require `TlsSize`.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! This crate provides the following data structures that implement TLS</span>
 <span class="doccomment">//! serialization/deserialization</span>
@@ -154,6 +166,9 @@
 <span class="doccomment">//!   the elements to implement zeroize as well.</span>
 <span class="doccomment">//! * `TlsSliceU8`, `TlsSliceU16`, `TlsSliceU32` are lightweight wrapper for slices</span>
 <span class="doccomment">//!   that allow to serialize them without having to create a `TlsVec*`.</span>
+<span class="doccomment">//! * `TlsByteSliceU8`, `TlsByteSliceU16`, `TlsByteSliceU32`, and</span>
+<span class="doccomment">//!   `TlsByteVecU8`, `TlsByteVecU16`, `TlsByteVecU32`</span>
+<span class="doccomment">//!   are provided with optimized implementations for byte vectors.</span>
 <span class="doccomment">//! * `[u8; l]`, for `l ∈ [1..128]`</span>
 <span class="doccomment">//! * Serialize for `Option&lt;T&gt;` where `T: Serialize`</span>
 <span class="doccomment">//! * Deserialize for `Option&lt;T&gt;` where `T: Deserialize`</span>
@@ -180,12 +195,13 @@
 <span class="kw">mod</span> <span class="ident">primitives</span>;
 <span class="kw">mod</span> <span class="ident">tls_vec</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tls_vec</span>::{
-    <span class="ident">SecretTlsVecU16</span>, <span class="ident">SecretTlsVecU32</span>, <span class="ident">SecretTlsVecU8</span>, <span class="ident">TlsSliceU16</span>, <span class="ident">TlsSliceU32</span>, <span class="ident">TlsSliceU8</span>,
-    <span class="ident">TlsVecU16</span>, <span class="ident">TlsVecU32</span>, <span class="ident">TlsVecU8</span>,
+    <span class="ident">SecretTlsVecU16</span>, <span class="ident">SecretTlsVecU32</span>, <span class="ident">SecretTlsVecU8</span>, <span class="ident">TlsByteSliceU16</span>, <span class="ident">TlsByteSliceU32</span>,
+    <span class="ident">TlsByteSliceU8</span>, <span class="ident">TlsByteVecU16</span>, <span class="ident">TlsByteVecU32</span>, <span class="ident">TlsByteVecU8</span>, <span class="ident">TlsSliceU16</span>, <span class="ident">TlsSliceU32</span>,
+    <span class="ident">TlsSliceU8</span>, <span class="ident">TlsVecU16</span>, <span class="ident">TlsVecU32</span>, <span class="ident">TlsVecU8</span>,
 };
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;derive&quot;</span>)]</span>
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tls_codec_derive</span>::{<span class="ident">TlsDeserialize</span>, <span class="ident">TlsSerialize</span>};
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tls_codec_derive</span>::{<span class="ident">TlsDeserialize</span>, <span class="ident">TlsSerialize</span>, <span class="ident">TlsSize</span>};
 
 <span class="doccomment">/// Errors that are thrown by this crate.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Clone</span>)]</span>
@@ -226,12 +242,12 @@
     }
 }
 
-<span class="doccomment">/// The `TlsSize` trait needs to be implemented by any struct that should be</span>
+<span class="doccomment">/// The `Size` trait needs to be implemented by any struct that should be</span>
 <span class="doccomment">/// efficiently serialized.</span>
 <span class="doccomment">/// This allows to collect the length of a serialized structure before allocating</span>
 <span class="doccomment">/// memory.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">TlsSize</span> {
-    <span class="kw">fn</span> <span class="ident">serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span>;
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Size</span> {
+    <span class="kw">fn</span> <span class="ident">tls_serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span>;
 }
 
 <span class="doccomment">/// The `Serialize` trait provides functions to serialize a struct or enum.</span>
@@ -239,16 +255,22 @@
 <span class="doccomment">/// The trait provides two functions:</span>
 <span class="doccomment">/// * `tls_serialize` that takes a buffer to write the serialization to</span>
 <span class="doccomment">/// * `tls_serialize_detached` that returns a byte vector</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Serialize</span>: <span class="ident">TlsSize</span> {
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Serialize</span>: <span class="ident">Size</span> {
     <span class="doccomment">/// Serialize `self` and write it to the `writer`.</span>
     <span class="doccomment">/// The function returns the number of bytes written to `writer`.</span>
     <span class="kw">fn</span> <span class="ident">tls_serialize</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">W</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">Error</span><span class="op">&gt;</span>;
 
     <span class="doccomment">/// Serialize `self` and return it as a byte vector.</span>
     <span class="kw">fn</span> <span class="ident">tls_serialize_detached</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">buffer</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="self">self</span>.<span class="ident">serialized_len</span>());
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">buffer</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="self">self</span>.<span class="ident">tls_serialized_len</span>());
         <span class="kw">let</span> <span class="ident">written</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">tls_serialize</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">buffer</span>)<span class="question-mark">?</span>;
-        <span class="macro">debug_assert_eq!</span>(<span class="ident">written</span>, <span class="ident">buffer</span>.<span class="ident">len</span>());
+        <span class="macro">debug_assert_eq!</span>(
+            <span class="ident">written</span>,
+            <span class="ident">buffer</span>.<span class="ident">len</span>(),
+            <span class="string">&quot;Expected that {} bytes were written but the output holds {} bytes&quot;</span>,
+            <span class="ident">written</span>,
+            <span class="ident">buffer</span>.<span class="ident">len</span>()
+        );
         <span class="kw">if</span> <span class="ident">written</span> <span class="op">!</span><span class="op">=</span> <span class="ident">buffer</span>.<span class="ident">len</span>() {
             <span class="prelude-val">Err</span>(<span class="ident">Error::EncodingError</span>(<span class="macro">format!</span>(
                 <span class="string">&quot;Expected that {} bytes were written but the output holds {} bytes&quot;</span>,
@@ -261,13 +283,13 @@
     }
 }
 
-<span class="doccomment">/// The `Deserialize` trait provides functions to deserialize a byte slice to a</span>
+<span class="doccomment">/// The `Deserialize` trait defines functions to deserialize a byte slice to a</span>
 <span class="doccomment">/// struct or enum.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// The trait provides one function:</span>
-<span class="doccomment">/// * `tls_deserialize` takes a [`std::io::Read`] to read from.</span>
-<span class="doccomment">///                     This will usually be a byte slice.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Deserialize</span> {
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Deserialize</span>: <span class="ident">Size</span> {
+    <span class="doccomment">/// This function deserializes the `bytes` from the provided a [`std::io::Read`]</span>
+    <span class="doccomment">/// and returns the populated struct.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// In order to get the amount of bytes read, use [`TlsSize::serialized_len`].</span>
     <span class="kw">fn</span> <span class="ident">tls_deserialize</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">Read</span><span class="op">&gt;</span>(<span class="ident">bytes</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">R</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">Error</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span>;

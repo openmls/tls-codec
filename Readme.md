@@ -18,10 +18,12 @@ serialization/deserialization
   the elements to implement zeroize as well.
 - `TlsSliceU8`, `TlsSliceU16`, `TlsSliceU32` are lightweight wrapper for slices
   that allow to serialize them without having to create a `TlsVec*`.
+- `TlsByteSliceU8`, `TlsByteSliceU16`, `TlsByteSliceU32`, and
+  `TlsByteVecU8`, `TlsByteVecU16`, `TlsByteVecU32`
+  are provided with optimized implementations for byte vectors.
 - `[u8; l]`, for `l ∈ [1..128]`
 - Serialize for `Option<T>` where `T: Serialize`
 - Deserialize for `Option<T>` where `T: Deserialize`
-
 
 [rfc 8446]: https://tools.ietf.org/html/rfc8446
 [mls]: https://messaginglayersecurity.rocks/mls-protocol/draft-ietf-mls-protocol.html

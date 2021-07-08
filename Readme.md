@@ -24,6 +24,8 @@ serialization/deserialization
 - `[u8; l]`, for `l ∈ [1..128]`
 - Serialize for `Option<T>` where `T: Serialize`
 - Deserialize for `Option<T>` where `T: Deserialize`
+- Serialize for `(T, U)` and `(T, U, V)` where `T, U, V` implement Serialize`
+- Deserialize for `(T, U)` and `(T, U, V)` where `T, U, V` implement Deserialize`
 
 [rfc 8446]: https://tools.ietf.org/html/rfc8446
 [mls]: https://messaginglayersecurity.rocks/mls-protocol/draft-ietf-mls-protocol.html

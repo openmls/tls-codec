@@ -22,6 +22,8 @@
 //! * `[u8; l]`, for `l ∈ [1..128]`
 //! * Serialize for `Option<T>` where `T: Serialize`
 //! * Deserialize for `Option<T>` where `T: Deserialize`
+//! * Serialize for `(T, U)` and `(T, U, V)` where `T, U, V` implement Serialize`
+//! * Deserialize for `(T, U)` and `(T, U, V)` where `T, U, V` implement Deserialize`
 //!
 //! ## Usage
 //!

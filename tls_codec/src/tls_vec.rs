@@ -46,7 +46,11 @@ macro_rules! impl_byte_deserialize {
                 vec: vec![0u8; len],
             };
             let read = bytes.read(result.vec.as_mut_slice())?;
-            debug_assert_eq!(read, len);
+            debug_assert_eq!(
+                read, len,
+                "Expected to read {} bytes but {} were read.",
+                len, read
+            );
             if read != len {
                 Err(Error::DecodingError(format!(
                     "{} bytes were read but {} were expected",
@@ -253,7 +257,10 @@ macro_rules! impl_vec_members {
 
         /// Create a new `TlsVec` from a slice.
         #[inline]
-        pub fn from_slice(slice: &[$element_type]) -> Self {
+        pub fn from_slice(slice: &[$element_type]) -> Self
+        where
+            $element_type: Clone,
+        {
             Self {
                 vec: slice.to_vec(),
             }
@@ -269,12 +276,6 @@ macro_rules! impl_vec_members {
         #[inline]
         pub fn as_slice(&self) -> &[$element_type] {
             &self.vec
-        }
-
-        /// Get a copy of the underlying vector.
-        #[inline]
-        pub fn to_vec(&self) -> Vec<$element_type> {
-            self.vec.clone()
         }
 
         /// Check if the vector is empty.
@@ -299,6 +300,12 @@ macro_rules! impl_vec_members {
         #[inline]
         pub fn pop(&mut self) -> Option<$element_type> {
             self.vec.pop()
+        }
+
+        /// Remove the element at `index`.
+        #[inline]
+        pub fn remove(&mut self, index: usize) -> $element_type {
+            self.vec.remove(index)
         }
 
         /// Returns a reference to an element or subslice depending on the type of index.
@@ -333,9 +340,15 @@ macro_rules! impl_vec_members {
 
 macro_rules! impl_tls_vec_generic {
     ($size:ty, $name:ident, $len_len: literal, $($bounds:ident),*) => {
-        #[derive(Eq, Clone, Debug)]
+        #[derive(Eq, Debug)]
         pub struct $name<T: $($bounds + )*> {
             vec: Vec<T>,
+        }
+
+        impl<T: Clone + $($bounds + )*> Clone for $name<T> {
+            fn clone(&self) -> Self {
+                Self::new(self.vec.clone())
+            }
         }
 
         impl<T: $($bounds + )*> $name<T> {
@@ -358,7 +371,7 @@ macro_rules! impl_tls_vec_generic {
             }
         }
 
-        impl<T: $($bounds + )*> std::cmp::PartialEq for $name<T> {
+        impl<T: std::cmp::PartialEq + $($bounds + )*> std::cmp::PartialEq for $name<T> {
             fn eq(&self, other: &Self) -> bool {
                 self.vec.eq(&other.vec)
             }
@@ -397,7 +410,7 @@ macro_rules! impl_tls_vec_generic {
             }
         }
 
-        impl<T: $($bounds + )*> From<&[T]>
+        impl<T: Clone + $($bounds + )*> From<&[T]>
             for $name<T>
         {
             #[inline]
@@ -444,8 +457,6 @@ macro_rules! impl_tls_vec_generic {
         where
             T: Serialize
                 + Deserialize
-                + Clone
-                + PartialEq
                 + Size
                 + $($bounds + )*
                 serde::de::Deserialize<'de>,
@@ -498,8 +509,6 @@ macro_rules! impl_tls_vec_generic {
                 where
                     T: Serialize
                         + Deserialize
-                        + Clone
-                        + PartialEq
                         + Size
                         + $($bounds + )*
                         serde::de::Deserialize<'de>,
@@ -745,8 +754,6 @@ macro_rules! impl_secret_tls_vec {
             $len_len,
             Serialize,
             Deserialize,
-            Clone,
-            PartialEq,
             Size,
             Zeroize
         );
@@ -756,26 +763,24 @@ macro_rules! impl_secret_tls_vec {
             $len_len,
             Serialize,
             Deserialize,
-            Clone,
-            PartialEq,
             Size,
             Zeroize
         );
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + Size + Zeroize> $name<T> {
+        impl<T: Serialize + Deserialize + Size + Zeroize> $name<T> {
             // This implements serialize and size for all versions
             impl_serialize!(self, $size, $name, $len_len);
             impl_size!(self, $size, $name, $len_len);
             impl_deserialize!(self, $size, $name, $len_len);
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + Size + Zeroize> Zeroize for $name<T> {
+        impl<T: Serialize + Deserialize + Size + Zeroize> Zeroize for $name<T> {
             fn zeroize(&mut self) {
                 self.vec.zeroize()
             }
         }
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + Size + Zeroize> Drop for $name<T> {
+        impl<T: Serialize + Deserialize + Size + Zeroize> Drop for $name<T> {
             fn drop(&mut self) {
                 self.zeroize()
             }
@@ -785,29 +790,11 @@ macro_rules! impl_secret_tls_vec {
 
 macro_rules! impl_public_tls_vec {
     ($size:ty, $name:ident, $len_len: literal) => {
-        impl_tls_vec_generic!(
-            $size,
-            $name,
-            $len_len,
-            Serialize,
-            Deserialize,
-            Clone,
-            PartialEq,
-            Size
-        );
+        impl_tls_vec_generic!($size, $name, $len_len, Serialize, Deserialize, Size);
 
-        impl_tls_vec_codec_generic!(
-            $size,
-            $name,
-            $len_len,
-            Serialize,
-            Deserialize,
-            Clone,
-            PartialEq,
-            Size
-        );
+        impl_tls_vec_codec_generic!($size, $name, $len_len, Serialize, Deserialize, Size);
 
-        impl<T: Serialize + Deserialize + Clone + PartialEq + Size> $name<T> {
+        impl<T: Serialize + Deserialize + Size> $name<T> {
             // This implements serialize and size for all versions
             impl_serialize!(self, $size, $name, $len_len);
             impl_size!(self, $size, $name, $len_len);

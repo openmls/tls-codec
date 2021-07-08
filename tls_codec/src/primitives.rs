@@ -83,3 +83,80 @@ impl From<std::array::TryFromSliceError> for Error {
         Self::InvalidInput
     }
 }
+
+// Implement (de)serialization for tuple.
+impl<T, U> Deserialize for (T, U)
+where
+    T: Deserialize,
+    U: Deserialize,
+{
+    #[inline(always)]
+    fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error> {
+        Ok((T::tls_deserialize(bytes)?, U::tls_deserialize(bytes)?))
+    }
+}
+
+impl<T, U> Serialize for (T, U)
+where
+    T: Serialize,
+    U: Serialize,
+{
+    #[inline(always)]
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let written = self.0.tls_serialize(writer)?;
+        self.1.tls_serialize(writer).map(|l| l + written)
+    }
+}
+
+impl<T, U> Size for (T, U)
+where
+    T: Size,
+    U: Size,
+{
+    #[inline(always)]
+    fn tls_serialized_len(&self) -> usize {
+        self.0.tls_serialized_len() + self.1.tls_serialized_len()
+    }
+}
+
+impl<T, U, V> Deserialize for (T, U, V)
+where
+    T: Deserialize,
+    U: Deserialize,
+    V: Deserialize,
+{
+    #[inline(always)]
+    fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, Error> {
+        Ok((
+            T::tls_deserialize(bytes)?,
+            U::tls_deserialize(bytes)?,
+            V::tls_deserialize(bytes)?,
+        ))
+    }
+}
+
+impl<T, U, V> Serialize for (T, U, V)
+where
+    T: Serialize,
+    U: Serialize,
+    V: Serialize,
+{
+    #[inline(always)]
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut written = self.0.tls_serialize(writer)?;
+        written += self.1.tls_serialize(writer)?;
+        self.2.tls_serialize(writer).map(|l| l + written)
+    }
+}
+
+impl<T, U, V> Size for (T, U, V)
+where
+    T: Size,
+    U: Size,
+    V: Size,
+{
+    #[inline(always)]
+    fn tls_serialized_len(&self) -> usize {
+        self.0.tls_serialized_len() + self.1.tls_serialized_len() + self.2.tls_serialized_len()
+    }
+}

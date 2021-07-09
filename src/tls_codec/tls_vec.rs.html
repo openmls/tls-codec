@@ -945,6 +945,20 @@
 <span id="942">942</span>
 <span id="943">943</span>
 <span id="944">944</span>
+<span id="945">945</span>
+<span id="946">946</span>
+<span id="947">947</span>
+<span id="948">948</span>
+<span id="949">949</span>
+<span id="950">950</span>
+<span id="951">951</span>
+<span id="952">952</span>
+<span id="953">953</span>
+<span id="954">954</span>
+<span id="955">955</span>
+<span id="956">956</span>
+<span id="957">957</span>
+<span id="958">958</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! A vector with a length field for TLS serialisation.</span>
 <span class="doccomment">//! Use this for any vector that is serialised.</span>
@@ -990,16 +1004,30 @@
         <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
         <span class="kw">fn</span> <span class="ident">deserialize_bytes</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">Read</span><span class="op">&gt;</span>(<span class="ident">bytes</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">R</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
             <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="op">&lt;</span><span class="macro-nonterminal">$</span><span class="macro-nonterminal">size</span><span class="op">&gt;</span><span class="ident">::tls_deserialize</span>(<span class="ident">bytes</span>)<span class="question-mark">?</span> <span class="kw">as</span> <span class="ident">usize</span>;
+            <span class="comment">// When fuzzing we limit the maximum size to allocate.</span>
+            <span class="comment">// XXX: We should think about a configurable limit for the allocation</span>
+            <span class="comment">//      here.</span>
+            <span class="kw">if</span> <span class="macro">cfg!</span>(<span class="ident">fuzzing</span>) <span class="op">&amp;&amp;</span> <span class="ident">len</span> <span class="op">&gt;</span> <span class="ident">u16::MAX</span> <span class="kw">as</span> <span class="ident">usize</span> {
+                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">Error::DecodingError</span>(<span class="macro">format!</span>(
+                    <span class="string">&quot;Trying to allocate {} bytes. Only {} allowed.&quot;</span>,
+                    <span class="ident">len</span>,
+                    <span class="ident">u16::MAX</span>
+                )));
+            }
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">Self</span> {
                 <span class="ident">vec</span>: <span class="macro">vec!</span>[<span class="number">0u8</span>; <span class="ident">len</span>],
             };
             <span class="kw">let</span> <span class="ident">read</span> <span class="op">=</span> <span class="ident">bytes</span>.<span class="ident">read</span>(<span class="ident">result</span>.<span class="ident">vec</span>.<span class="ident">as_mut_slice</span>())<span class="question-mark">?</span>;
-            <span class="macro">debug_assert_eq!</span>(
-                <span class="ident">read</span>, <span class="ident">len</span>,
-                <span class="string">&quot;Expected to read {} bytes but {} were read.&quot;</span>,
-                <span class="ident">len</span>, <span class="ident">read</span>
-            );
             <span class="kw">if</span> <span class="ident">read</span> <span class="op">!</span><span class="op">=</span> <span class="ident">len</span> {
+                <span class="kw">if</span> <span class="op">!</span><span class="macro">cfg!</span>(<span class="ident">fuzzing</span>) {
+                    <span class="comment">// When fuzzing we don&#39;t want to assert here because it would</span>
+                    <span class="comment">// crash all the time. Throwing an error is sufficient.</span>
+                    <span class="macro">debug_assert_eq!</span>(
+                        <span class="ident">read</span>, <span class="ident">len</span>,
+                        <span class="string">&quot;Expected to read {} bytes but {} were read.&quot;</span>,
+                        <span class="ident">len</span>, <span class="ident">read</span>
+                    );
+                }
                 <span class="prelude-val">Err</span>(<span class="ident">Error::DecodingError</span>(<span class="macro">format!</span>(
                     <span class="string">&quot;{} bytes were read but {} were expected&quot;</span>,
                     <span class="ident">read</span>, <span class="ident">len</span>

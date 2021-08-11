@@ -7,8 +7,10 @@ use quote::{format_ident, quote, ToTokens};
 use syn::{
     self, parenthesized,
     parse::{ParseStream, Parser, Result},
-    parse_macro_input, Data, DeriveInput, Fields, FieldsNamed, FieldsUnnamed, Generics, Ident,
-    Index,
+    parse_macro_input,
+    punctuated::Punctuated,
+    token::Comma,
+    Data, DeriveInput, Fields, FieldsNamed, FieldsUnnamed, Generics, Ident, Index, Variant,
 };
 
 #[derive(Clone)]
@@ -41,12 +43,7 @@ struct Enum {
     ident: Ident,
     generics: Generics,
     enum_style: EnumStyle,
-    parsed_variants: Vec<TokenStream2>,
-    discriminants: Vec<TokenStream2>,
-    deconstructed_variants: Vec<TokenStream2>,
-    matched: Vec<TokenStream2>,
-    type_mapping: Vec<TokenStream2>,
-    variant_mapping: Vec<TokenStream2>,
+    variants: Punctuated<Variant, Comma>,
 }
 
 const ENUM_TYPE_POSTFIX: &'static str = "Type";
@@ -165,9 +162,20 @@ fn parse_ast(ast: DeriveInput) -> Result<TlsStruct> {
             }
 
             // The enum either has to have a repr or all variants need to be
-            // tuple structs.
+            // tuple structs with a single field that has a path-style type.
             let only_tuple_structs = !variants.iter().any(|variant| match variant.fields {
-                syn::Fields::Unnamed(_) => false,
+                syn::Fields::Unnamed(ref fields_unnamed) => {
+                    if fields_unnamed.unnamed.len() == 1 {
+                        let field_type = fields_unnamed.unnamed.first().unwrap().ty.clone();
+                        if let syn::Type::Path(_) = field_type {
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                }
                 _ => true,
             });
 
@@ -179,101 +187,12 @@ fn parse_ast(ast: DeriveInput) -> Result<TlsStruct> {
                 return Err(syn::Error::new(call_site, "enums either have to have a #[repr(...)] attribute or consist only of tuple structs"));
             };
 
-            // The variants will have a different suffix depending the enum style.
-            let repr_suffix = match enum_style {
-                EnumStyle::Repr(ref repr) => quote! {
-                    as #repr
-                },
-                EnumStyle::TupleStruct => quote! {},
-            };
-
-            let type_mapping: Vec<TokenStream2> = match enum_style {
-                EnumStyle::Repr(_) => vec![],
-                EnumStyle::TupleStruct => variants
-                    .iter()
-                    .map(|variant| {
-                        let variant = &variant.ident;
-                        let enum_type = &format_ident!("{}{}", ident, ENUM_TYPE_POSTFIX);
-                        quote! {
-                            #ident::#variant(_) => #enum_type::#variant
-                        }
-                    })
-                    .collect(),
-            };
-
-            let variant_mapping: Vec<TokenStream2> = match enum_style {
-                EnumStyle::Repr(_) => vec![],
-                EnumStyle::TupleStruct => variants
-                    .iter()
-                    .map(|variant| {
-                        let field_type = match variant.fields {
-                            Fields::Unnamed(ref fields_unnamed) => fields_unnamed.unnamed.first().unwrap().ty.clone(),
-                            _ => panic!("non-repr enums can only consist of tuple structs with a single unnamed field"),
-                        };
-                        let type_path = match field_type {
-                            syn::Type::Path(tp) => tp.path,
-                            _ => panic!("fields of the tuple struct can only have a simple path-style type"),
-                        };
-                        let variant_ident = &variant.ident;
-                        let enum_type = &format_ident!("{}{}", ident, ENUM_TYPE_POSTFIX);
-                        quote! {
-                            #enum_type::#variant_ident => Ok(#ident::#variant_ident(#type_path::tls_deserialize(bytes)?))
-                        }
-                    })
-                    .collect(),
-            };
-
-            let deconstructed_variants: Vec<TokenStream2> = variants
-                .iter()
-                .map(|variant| {
-                    let variant = &variant.ident;
-                    quote! {
-                        #ident::#variant(variable) => variable
-                    }
-                })
-                .collect();
-
-            let parsed_variants: Vec<TokenStream2> = variants
-                .iter()
-                .map(|variant| {
-                    let variant = &variant.ident;
-                    quote! {
-                        #ident::#variant => #ident::#variant #repr_suffix,
-                    }
-                })
-                .collect();
-
-            let discriminants: Vec<TokenStream2> = variants
-                .iter()
-                .map(|variant| {
-                    let variant = &variant.ident;
-                    quote! {
-                        const #variant: #repr = #ident::#variant #repr_suffix;
-                    }
-                })
-                .collect();
-
-            let matched: Vec<TokenStream2> = variants
-                .iter()
-                .map(|variant| {
-                    let variant = &variant.ident;
-                    quote! {
-                        #variant => core::result::Result::Ok(#ident::#variant),
-                    }
-                })
-                .collect();
-
             Ok(TlsStruct::Enum(Enum {
                 call_site,
                 ident: ident.clone(),
                 generics: generics.clone(),
                 enum_style,
-                parsed_variants,
-                discriminants,
-                deconstructed_variants,
-                matched,
-                type_mapping,
-                variant_mapping,
+                variants,
             }))
         }
         Data::Union(_) => unimplemented!(),
@@ -359,13 +278,18 @@ fn impl_tls_size(parsed_ast: TlsStruct) -> TokenStream2 {
             ident,
             generics,
             enum_style,
-            parsed_variants,
-            discriminants,
-            deconstructed_variants,
-            matched,
-            type_mapping,
-            variant_mapping,
+            variants,
         }) => {
+            let deconstructed_variants: Vec<TokenStream2> = variants
+                .iter()
+                .map(|variant| {
+                    let variant = &variant.ident;
+                    quote! {
+                        #ident::#variant(variable) => variable
+                    }
+                })
+                .collect();
+
             let function_block = match enum_style {
                 EnumStyle::Repr(repr) => {
                     quote! {
@@ -501,30 +425,62 @@ fn impl_serialize(parsed_ast: TlsStruct) -> TokenStream2 {
             ident,
             generics,
             enum_style,
-            parsed_variants,
-            discriminants,
-            deconstructed_variants,
-            matched,
-            type_mapping,
-            variant_mapping,
+            variants,
         }) => {
             let function_block = match enum_style {
-                EnumStyle::Repr(_) => quote! {
-                    let enum_value = match self {
-                        #(#parsed_variants)*
-                    };
-                    enum_value.tls_serialize(writer)
-                },
+                EnumStyle::Repr(repr) => {
+                    let parsed_variants: Vec<TokenStream2> = variants
+                        .iter()
+                        .map(|variant| {
+                            let variant = &variant.ident;
+                            quote! {
+                                #ident::#variant => #ident::#variant as #repr,
+                            }
+                        })
+                        .collect();
+                    quote! {
+                        let enum_value = match self {
+                            #(#parsed_variants)*
+                        };
+                        enum_value.tls_serialize(writer)
+                    }
+                }
                 // This can probably be optimised such that we only have one
                 // `match` statement.
-                EnumStyle::TupleStruct => quote! {
-                    let mut written = match self {
-                        #(#type_mapping.tls_serialize(writer)?,)*
+                EnumStyle::TupleStruct => {
+                    let type_mapping: Vec<TokenStream2> = match enum_style {
+                        EnumStyle::Repr(_) => vec![],
+                        EnumStyle::TupleStruct => variants
+                            .iter()
+                            .map(|variant| {
+                                let variant = &variant.ident;
+                                let enum_type = &format_ident!("{}{}", ident, ENUM_TYPE_POSTFIX);
+                                quote! {
+                                    #ident::#variant(_) => #enum_type::#variant
+                                }
+                            })
+                            .collect(),
                     };
-                    match self {
-                        #(#deconstructed_variants.tls_serialize(writer),)*
-                    }.map(|l| l + written)
-                },
+
+                    let deconstructed_variants: Vec<TokenStream2> = variants
+                        .iter()
+                        .map(|variant| {
+                            let variant = &variant.ident;
+                            quote! {
+                                #ident::#variant(variable) => variable
+                            }
+                        })
+                        .collect();
+
+                    quote! {
+                        let mut written = match self {
+                            #(#type_mapping.tls_serialize(writer)?,)*
+                        };
+                        match self {
+                            #(#deconstructed_variants.tls_serialize(writer),)*
+                        }.map(|l| l + written)
+                    }
+                }
             };
             quote! {
                 impl#generics tls_codec::Serialize for #ident#generics {
@@ -585,15 +541,30 @@ fn impl_deserialize(parsed_ast: TlsStruct) -> TokenStream2 {
             ident,
             generics,
             enum_style,
-            parsed_variants,
-            discriminants,
-            deconstructed_variants,
-            matched,
-            type_mapping,
-            variant_mapping,
+            variants,
         }) => {
             match enum_style {
-                EnumStyle::Repr(enum_repr) => {
+                EnumStyle::Repr(ref enum_repr) => {
+                    let discriminants: Vec<TokenStream2> = variants
+                        .iter()
+                        .map(|variant| {
+                            let variant = &variant.ident;
+                            quote! {
+                                const #variant: #enum_repr = #ident::#variant as #enum_repr;
+                            }
+                        })
+                        .collect();
+
+                    let matched: Vec<TokenStream2> = variants
+                        .iter()
+                        .map(|variant| {
+                            let variant = &variant.ident;
+                            quote! {
+                                #variant => core::result::Result::Ok(#ident::#variant),
+                            }
+                        })
+                        .collect();
+
                     quote! {
                         impl tls_codec::Deserialize for #ident {
                             #[allow(non_upper_case_globals)]
@@ -613,6 +584,27 @@ fn impl_deserialize(parsed_ast: TlsStruct) -> TokenStream2 {
                     }
                 }
                 EnumStyle::TupleStruct => {
+                    let variant_mapping: Vec<TokenStream2> = match enum_style {
+                        EnumStyle::Repr(_) => vec![],
+                        EnumStyle::TupleStruct => variants
+                            .iter()
+                            .map(|variant| {
+                                let field_type = match variant.fields {
+                                    Fields::Unnamed(ref fields_unnamed) => fields_unnamed.unnamed.first().unwrap().ty.clone(),
+                                    _ => panic!("non-repr enums can only consist of tuple structs with a single unnamed field"),
+                                };
+                                let type_path = match field_type {
+                                    syn::Type::Path(tp) => tp.path,
+                                    _ => panic!("fields of the tuple struct can only have a simple path-style type"),
+                                };
+                                let variant_ident = &variant.ident;
+                                let enum_type = &format_ident!("{}{}", ident, ENUM_TYPE_POSTFIX);
+                                quote! {
+                                    #enum_type::#variant_ident => Ok(#ident::#variant_ident(#type_path::tls_deserialize(bytes)?))
+                                }
+                            })
+                            .collect(),
+                    };
                     let enum_type = &format_ident!("{}{}", ident, ENUM_TYPE_POSTFIX);
                     quote! {
                         impl tls_codec::Deserialize for #ident {

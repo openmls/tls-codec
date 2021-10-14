@@ -1,3 +1,7 @@
+⚠️ THIS CODE MOVED TO https://github.com/RustCrypto/formats
+
+---
+
 # TLS Codec
 
 [![crates.io][tls_codec]][tls_codec-link] [![Docs][tls_codec_docs]][tls_codec_docs-link]
